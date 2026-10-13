@@ -17,11 +17,13 @@ const rootPkg = join(repoRoot, "package.json");
 const libPkg = join(repoRoot, "packages", "argue", "package.json");
 const cliPkg = join(repoRoot, "packages", "argue-cli", "package.json");
 const viewerPkg = join(repoRoot, "packages", "argue-viewer", "package.json");
+const coThinkPkg = join(repoRoot, "packages", "cothink", "package.json");
 
 await bumpField(rootPkg, "version", version);
 await bumpField(libPkg, "version", version);
 await bumpField(cliPkg, "version", version);
 await bumpField(viewerPkg, "version", version);
+await bumpField(coThinkPkg, "version", version);
 await bumpDep(cliPkg, "@onevcat/argue", `^${version}`);
 await bumpDep(viewerPkg, "@onevcat/argue", `^${version}`);
 

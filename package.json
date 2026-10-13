@@ -20,7 +20,8 @@
     "test:watch": "npm run -ws --if-present test:watch",
     "ci": "npm run check && npm run test && npm run build",
     "smoke:pack": "node ./scripts/smoke-packages.mjs",
-    "release:check": "npm run ci && npm run smoke:pack",
+    "smoke:cothink": "node ./scripts/smoke-cothink.mjs",
+    "release:check": "npm run build && npm run ci && npm run smoke:pack && npm run smoke:cothink",
     "prepare": "husky"
   },
   "lint-staged": {

@@ -209,6 +209,78 @@ function v3OutputSchema(context: SharedPeerContext, actor?: MemberId): Record<st
     actions: array({ oneOf: actions })
   });
 }
+const PROTOCOL_V5_COMMON = `${PROTOCOL_V4_COMMON} The final responseContract field in the user JSON is program-generated output guidance, not a peer's position or a copied source. Return only a completed version of responseContract.template as your top-level JSON object, never the input context or the contract wrapper. Its null values are deliberately invalid placeholders: replace every null with your own content of the schema's required type. Keep phase and the supplied review hash/version IDs exact. Arrays in the template are structural examples, not instructions to suppress assumptions, evidence requests or actions. Perform the supplied checks silently before emitting JSON. A narrative conclusion never substitutes for structured claims, actions or review positions. Each member must form their own judgments; the template supplies no accepted stance or joint conclusion.`;
+
+/** Put the concrete response shape after the long history, without prewriting judgments. */
+function v5ResponseContract(context: SharedPeerContext): Record<string, PeerJsonValue> {
+  const base = { phase: context.phase, conclusion: null, evidenceRequests: [] };
+  let template: Record<string, PeerJsonValue>;
+  let checks: string[];
+  if (context.phase === "opening") {
+    template = { ...base, claims: [{ statement: null, rationale: null, assumptions: [], sourceRefs: [] }] };
+    checks = [
+      "phase must be opening; claims must be 0..3 objects, never strings.",
+      "Give each claim its own nonempty statement and rationale, assumptions array and sourceRefs array.",
+      "Replace nulls with your independent content; conclusion is a string, not a substitute for claims."
+    ];
+  } else if (context.phase === "review") {
+    template = {
+      ...base,
+      reviewSetHash: context.reviewSetHash ?? "",
+      positions: context.reviewVersions.map((versionId) => ({
+        versionId,
+        stance: null,
+        rationale: null,
+        sourceRefs: []
+      }))
+    };
+    checks = [
+      "phase must be review; copy reviewSetHash exactly from the template.",
+      `Return exactly ${context.reviewVersions.length} positions: each listed versionId exactly once. Do not add, omit or duplicate versions.`,
+      "For each position independently choose accept, reject or uncertain and write a nonempty reason. Do not copy the peer's stance.",
+      "Keep sourceRefs as arrays of valid copied references, or [] when none support the judgment.",
+      "A prose conclusion alone is invalid; replace all null placeholders, including every stance and rationale."
+    ];
+  } else {
+    template = { ...base, actions: [], readyToReview: null };
+    checks = [
+      "phase must be discussion; readyToReview must be a boolean; actions must be objects matching the action schema.",
+      "Include exactly one reply action for each requiredReplyIdsByMember entry under YOUR identity; never answer on behalf of the peer.",
+      "Use only author-scoped frozen IDs from the schema; modify only your own latest versions. A reply alone does not resolve an objection."
+    ];
+  }
+  return {
+    requiredFields: Object.keys(template),
+    template,
+    checks,
+    ...(context.phase === "discussion"
+      ? {
+          requiredReplyIdsByMember: Object.fromEntries(
+            MEMBER_IDS.map((id) => [
+              id,
+              context.messages
+                .filter((m) => m.kind !== "reply" && m.recipientId === id && m.respondedBy.length === 0)
+                .map((m) => m.messageId)
+            ])
+          )
+        }
+      : {})
+  };
+}
+
+function v5OutputSchema(context: SharedPeerContext, memberId: MemberId): Record<string, PeerJsonValue> {
+  const schema = v3OutputSchema(context, memberId);
+  if (context.phase === "review") {
+    const properties = schema.properties as Record<string, PeerJsonValue>;
+    properties.positions = {
+      ...(properties.positions as Record<string, PeerJsonValue>),
+      minItems: context.reviewVersions.length,
+      maxItems: context.reviewVersions.length
+    };
+  }
+  return schema;
+}
+
 export function buildMemberRequest(
   state: PeerSession,
   memberId: MemberId,
@@ -222,11 +294,13 @@ export function buildMemberRequest(
   if (segment.snapshotId !== snapshotId) throw new Error("Shared snapshot does not match protocol state");
   const compiled = MEMBER_IDS.map((id) => {
     const outputSchema =
-      state.config.promptVersion === "peer-v4"
-        ? v3OutputSchema(sharedContext, id)
-        : state.config.promptVersion === "peer-v3"
-          ? v3OutputSchema(sharedContext)
-          : structuredClone(PeerTurnJsonSchemas[segment.phase]);
+      state.config.promptVersion === "peer-v5"
+        ? v5OutputSchema(sharedContext, id)
+        : state.config.promptVersion === "peer-v4"
+          ? v3OutputSchema(sharedContext, id)
+          : state.config.promptVersion === "peer-v3"
+            ? v3OutputSchema(sharedContext)
+            : structuredClone(PeerTurnJsonSchemas[segment.phase]);
     const protocolText =
       state.config.promptVersion === "peer-v1"
         ? PROTOCOL
@@ -234,13 +308,20 @@ export function buildMemberRequest(
           ? `${PROTOCOL_V2_COMMON}\n${PROTOCOL_V2_PHASE[segment.phase]}`
           : state.config.promptVersion === "peer-v3"
             ? `${PROTOCOL_V3_COMMON}\n${PROTOCOL_V3_PHASE[segment.phase]}`
-            : `${PROTOCOL_V4_COMMON}\n${PROTOCOL_V4_PHASE[segment.phase]}`;
+            : state.config.promptVersion === "peer-v4"
+              ? `${PROTOCOL_V4_COMMON}\n${PROTOCOL_V4_PHASE[segment.phase]}`
+              : `${PROTOCOL_V5_COMMON}\n${PROTOCOL_V4_PHASE[segment.phase]}`;
+    const contextJson = canonicalJson(sharedContext);
+    const userContent =
+      state.config.promptVersion === "peer-v5"
+        ? `${contextJson.slice(0, -1)},"responseContract":${canonicalJson(v5ResponseContract(sharedContext))}}`
+        : contextJson;
     const messages: MemberRequest["messages"] = [
       {
         role: "system",
         content: `${protocolText}\nProtocol prompt version: ${state.config.promptVersion}\nYour identity: ${id}. Output JSON schema: ${canonicalJson(outputSchema)}`
       },
-      { role: "user", content: canonicalJson(sharedContext) }
+      { role: "user", content: userContent }
     ];
     return { id, outputSchema, messages };
   });

@@ -1,4 +1,4 @@
-import { createServer, type Server } from "node:http";
+import { createServer, type Server, type IncomingHttpHeaders } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { PeerRuntimeFailure, type MemberRequest } from "@onevcat/argue";
 import { createPeerApiRuntime } from "../../src/runtime/peer-api.js";
@@ -10,11 +10,13 @@ let server: Server | undefined;
 
 async function localServer(reply: (request: Record<string, unknown>) => Reply) {
   const requests: Record<string, unknown>[] = [];
+  const headers: IncomingHttpHeaders[] = [];
   server = createServer(async (req, res) => {
     const chunks: Buffer[] = [];
     for await (const chunk of req) chunks.push(Buffer.from(chunk));
     const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>;
     requests.push(body);
+    headers.push(req.headers);
     const result = reply(body);
     if (result.hold) return;
     res.writeHead(result.status ?? 200, { "content-type": "application/json" });
@@ -23,7 +25,7 @@ async function localServer(reply: (request: Record<string, unknown>) => Reply) {
   await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("No local address");
-  return { baseUrl: `http://127.0.0.1:${address.port}/v1`, requests };
+  return { baseUrl: `http://127.0.0.1:${address.port}/v1`, requests, headers };
 }
 
 function request(baseUrl: string, overrides: Partial<MemberRequest> = {}): MemberRequest {
@@ -75,6 +77,56 @@ afterEach(async () => {
 });
 
 describe("peer API transport", () => {
+  it("redacts explicitly scoped peer credentials longest-first while authenticating with the current key", async () => {
+    const otherKey = `${fakeKey}-other-peer`;
+    const escapedOther = `\\u0075${otherKey.slice(1)}`;
+    const scopedRuntime = createPeerApiRuntime(
+      { FAKE_PEER_KEY: fakeKey, OTHER_PEER_KEY: otherKey, ORDINARY_SETTING: "ordinary-value" },
+      ["FAKE_PEER_KEY", "OTHER_PEER_KEY"]
+    );
+    const body = completion(
+      `{"literal":"${otherKey}","escaped":"${escapedOther}","${escapedOther}":"${fakeKey}","ordinary":"ordinary-value"}`
+    );
+    body.model = otherKey;
+    const local = await localServer(() => ({ body }));
+    const reply = await scopedRuntime.respond(request(local.baseUrl), new AbortController().signal);
+    expect(reply.payload).toEqual({
+      literal: "[REDACTED]",
+      escaped: "[REDACTED]",
+      "[REDACTED]": "[REDACTED]",
+      ordinary: "ordinary-value"
+    });
+    expect(reply.modelId).toBe("[REDACTED]");
+    expect(local.headers[0]?.authorization).toBe(`Bearer ${fakeKey}`);
+    expect(JSON.stringify(reply)).not.toContain(otherKey);
+    expect(reply.rawContent).not.toContain("other-peer");
+  });
+
+  it.each([200, 401])(
+    "redacts other peer credentials in HTTP %i failures including Unicode escapes",
+    async (status) => {
+      const otherKey = "second-credential-for-peer";
+      const escaped = "\\u0073econd-credential-for-peer";
+      const scopedRuntime = createPeerApiRuntime({ FAKE_PEER_KEY: fakeKey, OTHER_PEER_KEY: otherKey }, [
+        "OTHER_PEER_KEY"
+      ]);
+      const local = await localServer(() => ({
+        status,
+        body: status === 200 ? `broken ${escaped}` : { error: { message: `literal ${otherKey}, escaped ${escaped}` } }
+      }));
+      let failure: unknown;
+      try {
+        await scopedRuntime.respond(request(local.baseUrl), new AbortController().signal);
+      } catch (error) {
+        failure = error;
+      }
+      expect(failure).toBeInstanceOf(PeerRuntimeFailure);
+      const serialized = JSON.stringify(failure);
+      expect(serialized).not.toContain(otherKey);
+      expect(serialized).not.toContain("econd-credential-for-peer");
+      expect(serialized).toContain("[REDACTED]");
+    }
+  );
   it("sends explicit frozen messages, JSON mode, thinking and output cap; parses final content only", async () => {
     const local = await localServer(() => ({
       body: completion(validContent, "stop", { prompt_tokens: 8, completion_tokens: 9 })

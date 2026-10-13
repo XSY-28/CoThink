@@ -429,6 +429,114 @@ it("first CLI retry of active snapshot between commits pauses without dispatch",
   expect(recovered.events.at(-1)?.type).toBe("SessionPaused");
 });
 
+it("completes a paired review over HTTP with omitted metadata and commentary in exactly eight calls", async () => {
+  const requests: Array<{ model: string; phase: string; context: string }> = [];
+  server = createServer(async (req, res) => {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) chunks.push(Buffer.from(chunk));
+    const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as {
+      model: string;
+      messages: Array<{ content: string }>;
+    };
+    const context = body.messages.at(-1)!.content;
+    const frozen = JSON.parse(context) as { phase: string; reviewSetHash?: string; reviewVersions: string[] };
+    requests.push({ model: body.model, phase: frozen.phase, context });
+    const payload = {
+      phase: frozen.phase,
+      conclusion: "Independent position",
+      evidenceRequestsNote: "No sources supplied",
+      ...(frozen.phase === "opening"
+        ? { claims: [{ statement: `${body.model} hypothesis`, rationale: "A reason", note: "Unverified" }] }
+        : frozen.phase === "discussion"
+          ? { actions: [], readyToReview: true }
+          : {
+              reviewSetHash: frozen.reviewSetHash,
+              positions: frozen.reviewVersions.map((versionId) => ({
+                versionId,
+                stance: "uncertain",
+                rationale: "No evidence",
+                note: "Unverified"
+              }))
+            })
+    };
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(
+      JSON.stringify({
+        id: "local",
+        object: "chat.completion",
+        created: 1,
+        model: body.model,
+        choices: [
+          { index: 0, message: { role: "assistant", content: JSON.stringify(payload) }, finish_reason: "stop" }
+        ],
+        usage: { prompt_tokens: 2, completion_tokens: 3 }
+      })
+    );
+  });
+  await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("No local port");
+  const baseUrl = `http://127.0.0.1:${address.port}/v1`;
+  const config = join(root, "config.json");
+  await writeFile(
+    config,
+    JSON.stringify({
+      members: {
+        "member-a": { profile: "deepseek", baseUrl, modelId: "a", apiKeyEnv: "FAKE_PEER_A" },
+        "member-b": { profile: "glm", baseUrl, modelId: "b", apiKeyEnv: "FAKE_PEER_B" }
+      }
+    })
+  );
+  process.env.FAKE_PEER_A = "test-a";
+  process.env.FAKE_PEER_B = "test-b";
+  const sessionId = "normalized-http";
+  const result = await runCli(
+    [
+      "peer",
+      "start",
+      "--question",
+      "Which?",
+      "--config",
+      config,
+      "--session-id",
+      sessionId,
+      "--root",
+      root,
+      "--rounds",
+      "2",
+      "--max-calls",
+      "8"
+    ],
+    io
+  );
+  expect(errors).toEqual([]);
+  expect(result.ok).toBe(true);
+  expect(requests).toHaveLength(8);
+  const state = await new FilePeerStore(root).load(sessionId);
+  expect(state.status).toBe("completed");
+  expect(state.rounds).toHaveLength(4);
+  expect(state.attempts.every((attempt) => attempt.status === "valid")).toBe(true);
+  for (const phase of ["opening", "discussion", "review"]) {
+    const a = requests
+      .filter((request) => request.model === "a" && request.phase === phase)
+      .map((request) => request.context);
+    const b = requests
+      .filter((request) => request.model === "b" && request.phase === phase)
+      .map((request) => request.context);
+    expect(a).toEqual(b);
+  }
+  for (const job of state.jobs) {
+    expect(job.sealedReply!.payload).not.toHaveProperty("evidenceRequestsNote");
+    expect(job.sealedReply!.payload.evidenceRequests).toEqual([]);
+  }
+  for (const attempt of state.attempts) {
+    expect(attempt.payload).toHaveProperty("evidenceRequestsNote");
+    expect(attempt.payload).toEqual(JSON.parse(attempt.rawContent!));
+  }
+  expect(buildPeerReport(state).reviewStatus).toBe("complete");
+  expect(state.segments[0]!.reviews.map((review) => review.positions.length)).toEqual([2, 2]);
+});
+
 it("runs a real local HTTP CLI session through failure, retry, continuation and export", async () => {
   let failDiscussionB = true;
   const requests: Array<{ model: string; phase: string; max_tokens: number }> = [];

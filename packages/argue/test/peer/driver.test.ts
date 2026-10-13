@@ -52,6 +52,44 @@ const makeDriver = (
 ) => new PeerSessionDriver(store, runtimes(respond), { now: () => new Date(NOW) });
 
 describe("PeerSessionDriver", () => {
+  it("seals normalized complete reviews in exactly two calls and retains both original responses", async () => {
+    const initial = makeSession({ phase: "review" });
+    const store = new MemoryStore(initial);
+    const calls: MemberRequest[] = [];
+    const driver = makeDriver(store, async (request) => {
+      calls.push(request);
+      const payload = {
+        phase: "review",
+        reviewSetHash: initial.segments[0]!.reviewSetHash,
+        conclusion: "Independent assessment",
+        evidenceRequestsNote: "No external evidence",
+        positions: initial.segments[0]!.reviewVersions.map((versionId) => ({
+          versionId,
+          stance: "uncertain",
+          rationale: "Unclear"
+        }))
+      };
+      return reply(request, payload);
+    });
+    const completed = await driver.run(initial.config.sessionId);
+    expect(completed.status).toBe("completed");
+    expect(calls.map((call) => call.memberId).sort()).toEqual(["member-a", "member-b"]);
+    expect(calls[0]!.sharedContext).toEqual(calls[1]!.sharedContext);
+    expect(completed.attempts).toHaveLength(2);
+    for (const attempt of completed.attempts) {
+      expect(attempt.status).toBe("valid");
+      expect(attempt.payload).toEqual(JSON.parse(attempt.rawContent!));
+      expect(attempt.payload).toHaveProperty("evidenceRequestsNote");
+      expect(attempt.payload).not.toHaveProperty("evidenceRequests");
+      const sealed = completed.jobs.find((job) => job.jobId === attempt.jobId)!.sealedReply!.payload;
+      expect(sealed).not.toHaveProperty("evidenceRequestsNote");
+      expect(sealed.evidenceRequests).toEqual([]);
+      expect(sealed.phase).toBe("review");
+      if (sealed.phase === "review") expect(sealed.positions.map((p) => p.sourceRefs)).toEqual([[], []]);
+    }
+    expect(completed.segments[0]!.reviews).toHaveLength(2);
+  });
+
   it("recovers an active snapshot between commits into a durable pause without calls", async () => {
     const store = new MemoryStore(makeSession());
     let calls = 0;

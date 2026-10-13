@@ -1,0 +1,360 @@
+{
+  "claimVersions": [
+    {
+      "statement": "Recorded reasoning",
+      "rationale": "Recorded reasoning",
+      "assumptions": ["Recorded assumption", "Recorded assumption"],
+      "sourceRefs": [],
+      "claimId": "segment-1:member-a:claim-1",
+      "versionId": "segment-1:member-a:claim-1:v1",
+      "authorId": "member-a",
+      "segmentId": 1,
+      "roundIndex": 0,
+      "version": 1,
+      "withdrawn": false
+    },
+    {
+      "statement": "Recorded reasoning",
+      "rationale": "Recorded reasoning",
+      "assumptions": ["Recorded assumption", "Recorded assumption"],
+      "sourceRefs": [],
+      "claimId": "segment-1:member-a:claim-2",
+      "versionId": "segment-1:member-a:claim-2:v1",
+      "authorId": "member-a",
+      "segmentId": 1,
+      "roundIndex": 0,
+      "version": 1,
+      "withdrawn": false
+    },
+    {
+      "statement": "Recorded reasoning",
+      "rationale": "Recorded reasoning",
+      "assumptions": ["Recorded assumption", "Recorded assumption"],
+      "sourceRefs": [],
+      "claimId": "segment-1:member-a:claim-3",
+      "versionId": "segment-1:member-a:claim-3:v1",
+      "authorId": "member-a",
+      "segmentId": 1,
+      "roundIndex": 0,
+      "version": 1,
+      "withdrawn": false
+    },
+    {
+      "statement": "Recorded reasoning",
+      "rationale": "Recorded reasoning",
+      "assumptions": ["Recorded assumption", "Recorded assumption"],
+      "sourceRefs": [],
+      "claimId": "segment-1:member-b:claim-1",
+      "versionId": "segment-1:member-b:claim-1:v1",
+      "authorId": "member-b",
+      "segmentId": 1,
+      "roundIndex": 0,
+      "version": 1,
+      "withdrawn": false
+    },
+    {
+      "statement": "Recorded reasoning",
+      "rationale": "Recorded reasoning",
+      "assumptions": ["Recorded assumption"],
+      "sourceRefs": [],
+      "claimId": "segment-1:member-b:claim-2",
+      "versionId": "segment-1:member-b:claim-2:v1",
+      "authorId": "member-b",
+      "segmentId": 1,
+      "roundIndex": 0,
+      "version": 1,
+      "withdrawn": false
+    },
+    {
+      "statement": "Recorded reasoning",
+      "rationale": "Recorded reasoning",
+      "assumptions": ["Recorded assumption", "Recorded assumption"],
+      "sourceRefs": [],
+      "claimId": "segment-1:member-b:claim-3",
+      "versionId": "segment-1:member-b:claim-3:v1",
+      "authorId": "member-b",
+      "segmentId": 1,
+      "roundIndex": 0,
+      "version": 1,
+      "withdrawn": false
+    },
+    {
+      "statement": "Recorded reasoning",
+      "rationale": "Recorded reasoning",
+      "assumptions": ["Recorded assumption", "Recorded assumption"],
+      "sourceRefs": [],
+      "claimId": "segment-1:member-a:claim-4",
+      "versionId": "segment-1:member-a:claim-4:v1",
+      "authorId": "member-a",
+      "segmentId": 1,
+      "roundIndex": 1,
+      "version": 1,
+      "withdrawn": false
+    },
+    {
+      "statement": "Recorded reasoning",
+      "rationale": "Recorded reasoning",
+      "assumptions": ["Recorded assumption", "Recorded assumption", "Recorded assumption"],
+      "sourceRefs": [],
+      "claimId": "segment-1:member-a:claim-4",
+      "versionId": "segment-1:member-a:claim-4:v2",
+      "authorId": "member-a",
+      "segmentId": 1,
+      "roundIndex": 2,
+      "version": 2,
+      "previousVersionId": "segment-1:member-a:claim-4:v1",
+      "withdrawn": false
+    },
+    {
+      "statement": "Recorded reasoning",
+      "rationale": "Recorded reasoning",
+      "assumptions": ["Recorded assumption", "Recorded assumption"],
+      "sourceRefs": [],
+      "claimId": "segment-1:member-b:claim-2",
+      "versionId": "segment-1:member-b:claim-2:v2",
+      "authorId": "member-b",
+      "segmentId": 1,
+      "roundIndex": 2,
+      "version": 2,
+      "previousVersionId": "segment-1:member-b:claim-2:v1",
+      "withdrawn": false
+    },
+    {
+      "statement": "Recorded reasoning",
+      "rationale": "Recorded reasoning",
+      "assumptions": ["Recorded assumption", "Recorded assumption"],
+      "sourceRefs": [],
+      "claimId": "segment-1:member-b:claim-1",
+      "versionId": "segment-1:member-b:claim-1:v2",
+      "authorId": "member-b",
+      "segmentId": 1,
+      "roundIndex": 2,
+      "version": 2,
+      "previousVersionId": "segment-1:member-b:claim-1:v1",
+      "withdrawn": false
+    }
+  ],
+  "reviewVersions": [
+    "segment-1:member-a:claim-1:v1",
+    "segment-1:member-a:claim-2:v1",
+    "segment-1:member-a:claim-3:v1",
+    "segment-1:member-a:claim-4:v2",
+    "segment-1:member-b:claim-1:v2",
+    "segment-1:member-b:claim-2:v2",
+    "segment-1:member-b:claim-3:v1"
+  ],
+  "reviewSetHash": "sha256:dfc8ab2fa92ef53f7336a379ad8c0d8134dc84ebc99bd6e20eae26414ab26b93",
+  "cases": [
+    {
+      "label": "invented-version",
+      "payload": {
+        "phase": "review",
+        "conclusion": "Recorded reasoning",
+        "evidenceRequests": [
+          {
+            "request": "Recorded reasoning",
+            "rationale": "Recorded reasoning"
+          },
+          {
+            "request": "Recorded reasoning",
+            "rationale": "Recorded reasoning"
+          },
+          {
+            "request": "Recorded reasoning",
+            "rationale": "Recorded reasoning"
+          },
+          {
+            "request": "Recorded reasoning",
+            "rationale": "Recorded reasoning"
+          }
+        ],
+        "reviewSetHash": "sha256:dfc8ab2fa92ef53f7336a379ad8c0d8134dc84ebc99bd6e20eae26414ab26b93",
+        "positions": [
+          {
+            "versionId": "segment-1:member-a:claim-1:v1",
+            "stance": "uncertain",
+            "rationale": "Recorded reasoning",
+            "sourceRefs": []
+          },
+          {
+            "versionId": "segment-1:member-a:claim-1:v2",
+            "stance": "reject",
+            "rationale": "Recorded reasoning",
+            "sourceRefs": []
+          },
+          {
+            "versionId": "segment-1:member-a:claim-2:v1",
+            "stance": "uncertain",
+            "rationale": "Recorded reasoning",
+            "sourceRefs": []
+          },
+          {
+            "versionId": "segment-1:member-a:claim-3:v1",
+            "stance": "uncertain",
+            "rationale": "Recorded reasoning",
+            "sourceRefs": []
+          },
+          {
+            "versionId": "segment-1:member-a:claim-4:v2",
+            "stance": "uncertain",
+            "rationale": "Recorded reasoning",
+            "sourceRefs": []
+          },
+          {
+            "versionId": "segment-1:member-b:claim-1:v2",
+            "stance": "uncertain",
+            "rationale": "Recorded reasoning",
+            "sourceRefs": []
+          },
+          {
+            "versionId": "segment-1:member-b:claim-2:v2",
+            "stance": "uncertain",
+            "rationale": "Recorded reasoning",
+            "sourceRefs": []
+          },
+          {
+            "versionId": "segment-1:member-b:claim-3:v1",
+            "stance": "uncertain",
+            "rationale": "Recorded reasoning",
+            "sourceRefs": []
+          }
+        ]
+      },
+      "accepted": false
+    },
+    {
+      "label": "extra-note",
+      "payload": {
+        "phase": "review",
+        "conclusion": "Recorded reasoning",
+        "evidenceRequests": [
+          {
+            "targetVersionId": "segment-1:member-b:claim-2:v2",
+            "request": "Recorded reasoning",
+            "rationale": "Recorded reasoning"
+          },
+          {
+            "targetVersionId": "segment-1:member-b:claim-3:v1",
+            "request": "Recorded reasoning",
+            "rationale": "Recorded reasoning"
+          },
+          {
+            "targetVersionId": "segment-1:member-b:claim-1:v2",
+            "request": "Recorded reasoning",
+            "rationale": "Recorded reasoning"
+          }
+        ],
+        "reviewSetHash": "sha256:dfc8ab2fa92ef53f7336a379ad8c0d8134dc84ebc99bd6e20eae26414ab26b93",
+        "positions": [
+          {
+            "versionId": "segment-1:member-a:claim-1:v1",
+            "stance": "accept",
+            "rationale": "Recorded reasoning",
+            "sourceRefs": []
+          },
+          {
+            "versionId": "segment-1:member-a:claim-2:v1",
+            "stance": "accept",
+            "rationale": "Recorded reasoning",
+            "sourceRefs": []
+          },
+          {
+            "versionId": "segment-1:member-a:claim-3:v1",
+            "stance": "accept",
+            "rationale": "Recorded reasoning",
+            "sourceRefs": []
+          },
+          {
+            "versionId": "segment-1:member-a:claim-4:v2",
+            "stance": "accept",
+            "rationale": "Recorded reasoning",
+            "sourceRefs": []
+          },
+          {
+            "versionId": "segment-1:member-b:claim-1:v2",
+            "stance": "accept",
+            "rationale": "Recorded reasoning",
+            "sourceRefs": []
+          },
+          {
+            "versionId": "segment-1:member-b:claim-2:v2",
+            "stance": "accept",
+            "rationale": "Recorded reasoning",
+            "sourceRefs": []
+          },
+          {
+            "versionId": "segment-1:member-b:claim-3:v1",
+            "stance": "uncertain",
+            "rationale": "Recorded reasoning",
+            "sourceRefs": []
+          }
+        ],
+        "evidenceRequestsNote": "Recorded reasoning"
+      },
+      "accepted": true
+    },
+    {
+      "label": "missing-sourceRefs",
+      "payload": {
+        "phase": "review",
+        "reviewSetHash": "sha256:dfc8ab2fa92ef53f7336a379ad8c0d8134dc84ebc99bd6e20eae26414ab26b93",
+        "conclusion": "Recorded reasoning",
+        "evidenceRequests": [
+          {
+            "targetVersionId": "segment-1:member-b:claim-3:v1",
+            "request": "Recorded reasoning",
+            "rationale": "Recorded reasoning"
+          },
+          {
+            "targetVersionId": "segment-1:member-a:claim-3:v1",
+            "request": "Recorded reasoning",
+            "rationale": "Recorded reasoning"
+          },
+          {
+            "targetVersionId": "segment-1:member-b:claim-1:v2",
+            "request": "Recorded reasoning",
+            "rationale": "Recorded reasoning"
+          }
+        ],
+        "positions": [
+          {
+            "versionId": "segment-1:member-a:claim-1:v1",
+            "stance": "accept",
+            "rationale": "Recorded reasoning"
+          },
+          {
+            "versionId": "segment-1:member-a:claim-2:v1",
+            "stance": "uncertain",
+            "rationale": "Recorded reasoning"
+          },
+          {
+            "versionId": "segment-1:member-a:claim-3:v1",
+            "stance": "uncertain",
+            "rationale": "Recorded reasoning"
+          },
+          {
+            "versionId": "segment-1:member-a:claim-4:v2",
+            "stance": "accept",
+            "rationale": "Recorded reasoning"
+          },
+          {
+            "versionId": "segment-1:member-b:claim-1:v2",
+            "stance": "accept",
+            "rationale": "Recorded reasoning"
+          },
+          {
+            "versionId": "segment-1:member-b:claim-2:v2",
+            "stance": "accept",
+            "rationale": "Recorded reasoning"
+          },
+          {
+            "versionId": "segment-1:member-b:claim-3:v1",
+            "stance": "accept",
+            "rationale": "Recorded reasoning"
+          }
+        ]
+      },
+      "accepted": true
+    }
+  ]
+}

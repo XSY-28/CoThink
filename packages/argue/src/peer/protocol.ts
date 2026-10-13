@@ -1,7 +1,6 @@
 import {
   MEMBER_IDS,
   MemberReplySchema,
-  PeerTurnSchema,
   SessionConfigInputSchema,
   ContextSourceInputSchema,
   type ClaimDraft,
@@ -19,6 +18,7 @@ import {
 } from "./contracts.js";
 import { buildMemberRequest, currentSegment, peerSnapshotId } from "./context.js";
 import { hashJson, sha256 } from "./hash.js";
+import { normalizePeerTurn } from "./normalize.js";
 
 export function activeClaimVersions(state: PeerSession): ClaimVersion[] {
   const latest = new Map<string, ClaimVersion>();
@@ -143,7 +143,7 @@ export function validateMemberReply(state: PeerSession, candidate: MemberReply):
   if (envelope.snapshotId !== request.snapshotId) throw new Error("Stale snapshot ID");
   if (envelope.jobId !== request.jobId) throw new Error("Stale job ID");
   if (envelope.inputHash !== request.inputHash) throw new Error("Frozen input hash mismatch");
-  const payload = PeerTurnSchema.parse(envelope.payload);
+  const payload = normalizePeerTurn(envelope.payload);
   if (payload.phase !== request.phase) throw new Error("Wrong phase for frozen snapshot");
   for (const evidence of payload.evidenceRequests)
     if (evidence.targetVersionId) versionAt(state, evidence.targetVersionId);

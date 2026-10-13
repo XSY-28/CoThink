@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { applyRoundPair, buildMemberRequest, createPeerSession } from "../../src/index.js";
+import { applyRoundPair, buildMemberRequest, createPeerSession, validateMemberReply } from "../../src/index.js";
 import { makeConfig, makeDiscussionTurn, makeOpeningTurn, makePairFromTurns, makeSession } from "./fixtures.js";
 
 it("keeps peer-v1 frozen opening input hash for previously stored sessions", () => {
@@ -190,9 +190,186 @@ it("v2 gives phase-specific valid identifier and shared action guidance", () => 
   expect(discussion).toContain("reply actions are separate");
 });
 
-it("defaults new sessions to v4 and rejects unknown prompt versions", () => {
+it("keeps peer-v4 frozen opening input hash for previously stored sessions", () => {
+  const state = createPeerSession({ ...makeConfig("v4-hash"), promptVersion: "peer-v4" });
+  expect(buildMemberRequest(state, "member-a").inputHash).toBe(
+    "sha256:e43c56a2359a01e3390d41ddb790b7f4cdbb054192f0ddad956eac52641dccb1"
+  );
+});
+
+it("defaults new sessions to v5 and rejects unknown prompt versions", () => {
   const input = makeConfig();
   delete (input as { promptVersion?: string }).promptVersion;
-  expect(createPeerSession(input).config.promptVersion).toBe("peer-v4");
-  expect(() => createPeerSession({ ...input, promptVersion: "peer-v5" as never })).toThrow();
+  expect(createPeerSession(input).config.promptVersion).toBe("peer-v5");
+  expect(() => createPeerSession({ ...input, promptVersion: "peer-v6" as never })).toThrow();
+});
+
+it("v5 opening contract supplies phase and claim objects, without prewriting independent content", () => {
+  const state = makeSession();
+  state.config.promptVersion = "peer-v5" as never;
+  const a = buildMemberRequest(state, "member-a");
+  const b = buildMemberRequest(state, "member-b");
+  expect(a.messages[1]).toEqual(b.messages[1]);
+  const supplied = JSON.parse(a.messages[1]!.content);
+  const { responseContract, ...context } = supplied;
+  expect(context).toEqual(a.sharedContext);
+  expect(a.messages[1]!.content.endsWith(JSON.stringify(responseContract) + "}")).toBe(true);
+  expect(responseContract.requiredFields).toEqual(["phase", "conclusion", "evidenceRequests", "claims"]);
+  expect(responseContract.template).toEqual({
+    phase: "opening",
+    conclusion: null,
+    evidenceRequests: [],
+    claims: [{ statement: null, rationale: null, assumptions: [], sourceRefs: [] }]
+  });
+  for (const member of ["member-a", "member-b"] as const) {
+    const response = {
+      ...responseContract.template,
+      conclusion: "My position",
+      claims: [{ statement: "A hypothesis", rationale: "Independent reason", assumptions: [], sourceRefs: [] }]
+    };
+    const [reply] = makePairFromTurns(state, response, response);
+    const request = buildMemberRequest(state, member);
+    expect(
+      validateMemberReply(state, { ...reply, memberId: member, jobId: request.jobId, inputHash: request.inputHash })
+        .payload
+    ).toEqual(response);
+    const { phase: _phase, ...missingPhase } = response;
+    expect(_phase).toBe("opening");
+    expect(() =>
+      validateMemberReply(state, {
+        ...reply,
+        memberId: member,
+        jobId: request.jobId,
+        inputHash: request.inputHash,
+        payload: missingPhase
+      })
+    ).toThrow();
+  }
+});
+
+it("v5 review contract enumerates every frozen version with neutral unfilled judgments; omission stays invalid", () => {
+  const state = makeSession({ phase: "review", claimCount: 6 });
+  state.config.promptVersion = "peer-v5" as never;
+  const a = buildMemberRequest(state, "member-a");
+  const b = buildMemberRequest(state, "member-b");
+  expect(a.messages[1]).toEqual(b.messages[1]);
+  expect(a.outputSchema).toEqual(b.outputSchema);
+  const { responseContract } = JSON.parse(a.messages[1]!.content);
+  const template = responseContract.template;
+  expect(template.phase).toBe("review");
+  expect(template.reviewSetHash).toBe(state.segments[0]!.reviewSetHash);
+  expect(template.positions.map((p: { versionId: string }) => p.versionId)).toEqual(state.segments[0]!.reviewVersions);
+  expect(
+    template.positions.every((p: { stance: unknown; rationale: unknown }) => p.stance === null && p.rationale === null)
+  ).toBe(true);
+  expect(responseContract.requiredFields).toEqual([
+    "phase",
+    "conclusion",
+    "evidenceRequests",
+    "reviewSetHash",
+    "positions"
+  ]);
+  const schema = (a.outputSchema.properties as Record<string, unknown>).positions;
+  expect(schema).toMatchObject({ minItems: 6, maxItems: 6 });
+  for (const memberId of ["member-a", "member-b"] as const) {
+    const request = buildMemberRequest(state, memberId);
+    const response = {
+      ...template,
+      conclusion: "My assessment",
+      positions: template.positions.map((p: { versionId: string }) => ({
+        ...p,
+        stance: "uncertain",
+        rationale: "My independent reason"
+      }))
+    };
+    const envelope = {
+      memberId,
+      jobId: request.jobId,
+      snapshotId: request.snapshotId,
+      inputHash: request.inputHash,
+      payload: response
+    };
+    expect(validateMemberReply(state, envelope).payload).toEqual(response);
+    const missing: Record<string, unknown> = { ...response };
+    delete missing.reviewSetHash;
+    delete missing.positions;
+    for (const bad of [
+      template,
+      missing,
+      { ...response, positions: response.positions.slice(1) },
+      { ...response, reviewSetHash: "wrong" },
+      { ...response, positions: [...response.positions, response.positions[0]] }
+    ])
+      expect(() => validateMemberReply(state, { ...envelope, payload: bad })).toThrow();
+  }
+});
+
+it("v5 discussion contract routes required replies symmetrically and retains author-scoped references", () => {
+  let state = makeSession({ phase: "discussion", claimCount: 2 });
+  state.config.promptVersion = "peer-v5" as never;
+  const [aVersion, bVersion] = state.claimVersions;
+  state = applyRoundPair(
+    state,
+    makePairFromTurns(
+      state,
+      makeDiscussionTurn([
+        { kind: "ask", target: { versionId: bVersion!.versionId }, rationale: "Why B?", sourceRefs: [] }
+      ]),
+      makeDiscussionTurn([
+        { kind: "challenge", targetVersionId: aVersion!.versionId, rationale: "Why A?", sourceRefs: [] }
+      ])
+    )
+  );
+  const a = buildMemberRequest(state, "member-a");
+  const b = buildMemberRequest(state, "member-b");
+  expect(a.messages[1]).toEqual(b.messages[1]);
+  const contract = JSON.parse(a.messages[1]!.content).responseContract;
+  expect(contract.template).toEqual({
+    phase: "discussion",
+    conclusion: null,
+    evidenceRequests: [],
+    actions: [],
+    readyToReview: null
+  });
+  expect(contract.requiredReplyIdsByMember).toEqual({
+    "member-a": [state.messages[1]!.messageId],
+    "member-b": [state.messages[0]!.messageId]
+  });
+  for (const request of [a, b]) {
+    const actions = (
+      request.outputSchema.properties as unknown as {
+        actions: {
+          items: {
+            oneOf: Array<{
+              properties: {
+                kind: { const: string };
+                replyTo?: { enum: string[] };
+                targetVersionId?: { enum: string[] };
+              };
+            }>;
+          };
+        };
+      }
+    ).actions.items.oneOf;
+    expect(actions.find((item) => item.properties.kind.const === "reply")!.properties.replyTo!.enum).toEqual([
+      request.memberId === "member-a" ? state.messages[1]!.messageId : state.messages[0]!.messageId
+    ]);
+    expect(actions.find((item) => item.properties.kind.const === "revise")!.properties.targetVersionId!.enum).toEqual([
+      request.memberId === "member-a" ? aVersion!.versionId : bVersion!.versionId
+    ]);
+    const empty = { ...contract.template, conclusion: "My position", readyToReview: false };
+    expect(() =>
+      validateMemberReply(state, {
+        memberId: request.memberId,
+        jobId: request.jobId,
+        snapshotId: request.snapshotId,
+        inputHash: request.inputHash,
+        payload: empty
+      })
+    ).toThrow(/reply/i);
+  }
+  const lengths = [a, b].map((r) => r.messages.reduce((sum, m) => sum + m.content.length, 0));
+  state.config.members["member-a"].maxInputCharacters = Math.max(...lengths) - 1;
+  for (const member of ["member-a", "member-b"] as const)
+    expect(() => buildMemberRequest(state, member)).toThrow(/Compiled input exceeds/);
 });

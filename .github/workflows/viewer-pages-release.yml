@@ -1,9 +1,6 @@
-name: Deploy Viewer to Cloudflare Pages
+name: Manual legacy Viewer deployment to Cloudflare Pages
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
 
 jobs:

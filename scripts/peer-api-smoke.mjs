@@ -19,7 +19,10 @@ const session = createPeerSession(
   },
   []
 );
-const runtime = createPeerApiRuntime();
+const runtime = createPeerApiRuntime(
+  process.env,
+  Object.values(members).map((member) => member.apiKeyEnv)
+);
 
 for (const memberId of ["member-a", "member-b"]) {
   const request = buildMemberRequest(session, memberId);

@@ -6,11 +6,12 @@ This file applies to the whole `argue` repository.
 
 ## Repo Overview
 
-This repository is a monorepo with three workspace packages under **unified versioning** — root `package.json` holds the canonical version and every package carries the same number:
+This repository is a CoThink fork of argue with four workspace packages under **unified versioning** — root `package.json` holds the canonical version and every package carries the same number:
 
 - `@onevcat/argue`: reusable library (published)
 - `@onevcat/argue-cli`: CLI host (published)
 - `@onevcat/argue-viewer`: result viewer web app (private, `private: true`, never published)
+- `cothink`: standalone peer-only CLI; bundles local core/peer code and has no runtime dependency on unreleased upstream exports. Its tarball is the public deliverable; npm registry publication is not configured.
 
 The CLI depends on the library through a real semver dependency in `packages/argue-cli/package.json`. The viewer also consumes `@onevcat/argue` through a real semver range so its local build graph matches published reality.
 
@@ -47,11 +48,13 @@ Recommended daily loop:
 1. `npm install`
 2. make code changes
 3. `npm run test`
-4. `npm run release:check` before merging changes that affect packaging, dependency shape, or CLI installability
+4. Build before subprocess tests, then run `npm run release:check` before merging changes that affect packaging, dependency shape, or CLI installability
 
 ## Package Development Rules
 
 All workspace packages share one version. Do not bump packages individually — every release bumps root + every `packages/*/package.json` together and `@onevcat/argue-cli` / `@onevcat/argue-viewer` always depend on the exact same `@onevcat/argue` version.
+
+CoThink embeds the local core at build time; do not externalize `@onevcat/argue` in its bundle. Include CoThink in unified version updates.
 
 Workflow for any change that will be released:
 
@@ -81,9 +84,9 @@ Workflow:
 
 - GitHub Actions:
   - `.github/workflows/ci.yml` runs typecheck + tests + build on every PR and push to `master`.
-  - `.github/workflows/release.yml` publishes on tag push.
+  - `.github/workflows/release.yml` validates and uploads a CoThink tarball artifact on tags or manual dispatch; it does not publish npm packages or create a GitHub Release.
 - Triggered on `v*` tag push (one tag = one unified release)
-- Publishes `@onevcat/argue` then `@onevcat/argue-cli` in a single run
+- Do not enable upstream `@onevcat/*` publication in this fork. A registry publish or GitHub Release requires a separate explicit user request.
 - `@onevcat/argue-viewer` stays private and is never published
 
 Pre-flight checklist:
@@ -101,6 +104,8 @@ npm run release:check
 - `@onevcat/argue-cli` can be packed, installed with the packed library, and execute `argue --version`
 
 If package metadata, dependency wiring, or bin entry changes, run this command.
+
+`npm run smoke:cothink` packs/installs CoThink in a fresh temporary project and runs its entry points plus a local HTTP diagnostic/discussion/export flow. It must succeed without an installed upstream library or repository-relative files. `release:check` includes it.
 
 ## Init Command
 

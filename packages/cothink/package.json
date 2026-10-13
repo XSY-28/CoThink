@@ -1,0 +1,41 @@
+{
+  "name": "cothink",
+  "version": "0.6.1",
+  "description": "Local API discussions between two equal model peers, with versioned claims and complete independent reviews.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/XSY-28/CoThink.git",
+    "directory": "packages/cothink"
+  },
+  "homepage": "https://github.com/XSY-28/CoThink#readme",
+  "bugs": {
+    "url": "https://github.com/XSY-28/CoThink/issues"
+  },
+  "type": "module",
+  "bin": {
+    "cothink": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.68",
+    "@ai-sdk/openai-compatible": "^2.0.41",
+    "ai": "^6.0.153",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.7"
+  }
+}

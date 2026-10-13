@@ -2,6 +2,11 @@ node_modules/
 dist/
 coverage/
 .env
+.env.*
+!.env.example
+!.env.sample
+.cothink/
+*.tgz
 .DS_Store
 *.log
 .argue-peer/

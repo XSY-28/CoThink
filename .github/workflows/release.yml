@@ -1,53 +1,28 @@
-name: Release
+name: CoThink release validation
 
 on:
   push:
-    tags:
-      - "v*"
+    tags: ["v*"]
   workflow_dispatch:
-    inputs:
-      dry_run:
-        description: Run validation without publishing
-        required: true
-        default: true
-        type: boolean
+
+permissions:
+  contents: read
 
 jobs:
-  publish:
+  validate-and-pack:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-          registry-url: https://registry.npmjs.org
-
       - run: npm ci
-
+      - run: npm run lint
+      - run: npm run format:check
       - run: npm run release:check
-
-      - name: Verify CLI dependency shape
-        run: |
-          node --input-type=module -e '
-            import pkg from "./packages/argue-cli/package.json" with { type: "json" };
-            const value = pkg.dependencies?.["@onevcat/argue"];
-            if (!value) {
-              throw new Error("Missing @onevcat/argue dependency");
-            }
-            if (value.startsWith("file:") || value.startsWith("workspace:")) {
-              throw new Error(`CLI dependency must be a semver range, got ${value}`);
-            }
-          '
-
-      - name: Publish @onevcat/argue
-        if: ${{ github.ref_type == 'tag' }}
-        run: npm publish --workspace packages/argue --access public
-
-      - name: Publish @onevcat/argue-cli
-        if: ${{ github.ref_type == 'tag' }}
-        run: npm publish --workspace packages/argue-cli --access public
+      - run: mkdir -p release && npm pack --workspace packages/cothink --pack-destination release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cothink-package
+          path: release/cothink-*.tgz

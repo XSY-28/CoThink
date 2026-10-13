@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const PEER_SCHEMA_VERSION = 1;
-export const PEER_PROMPT_VERSION = "peer-v4";
+export const PEER_PROMPT_VERSION = "peer-v5";
 export const MEMBER_IDS = ["member-a", "member-b"] as const;
 export const MemberIdSchema = z.enum(MEMBER_IDS);
 export type MemberId = z.infer<typeof MemberIdSchema>;
@@ -152,7 +152,7 @@ const configFields = {
   goal: z.string().default(""),
   constraints: z.array(text).default([]),
   sourceCommit: text,
-  promptVersion: z.enum(["peer-v1", "peer-v2", "peer-v3", "peer-v4"]).default(PEER_PROMPT_VERSION),
+  promptVersion: z.enum(["peer-v1", "peer-v2", "peer-v3", "peer-v4", "peer-v5"]).default(PEER_PROMPT_VERSION),
   createdAt: z.string().datetime(),
   limits: PeerLimitsSchema.default({})
 };

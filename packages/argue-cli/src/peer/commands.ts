@@ -5,6 +5,7 @@ import { spawn } from "node:child_process";
 import {
   buildPeerReport,
   createPeerSession,
+  buildMemberRequest,
   PeerSessionDriver,
   type ContextSourceInput,
   type PeerSession,
@@ -13,7 +14,7 @@ import {
 import { loadPeerMembers } from "./config.js";
 import { FilePeerStore } from "./file-store.js";
 import { renderPeerHtml, renderPeerMarkdown, usageCoverage } from "./render.js";
-import { createPeerApiRuntime } from "../runtime/peer-api.js";
+import { createPeerApiRuntime, validatePeerApiRequest } from "../runtime/peer-api.js";
 
 type Io = Pick<typeof console, "log" | "error">;
 type Result = { ok: boolean; code: number };
@@ -118,7 +119,8 @@ async function drive(
   initial: PeerSession,
   store: PeerStore,
   mode: "run" | "recover" | "retry" | "continue",
-  options: Options
+  options: Options,
+  env: Record<string, string | undefined> = process.env
 ): Promise<PeerSession> {
   const controller = new AbortController();
   const onInterrupt = () => {
@@ -127,7 +129,10 @@ async function drive(
   };
   process.on("SIGINT", onInterrupt);
   try {
-    const runtime = createPeerApiRuntime();
+    const runtime = createPeerApiRuntime(
+      env,
+      Object.values(initial.config.members).map((member) => member.apiKeyEnv)
+    );
     const driver = new PeerSessionDriver(
       store,
       { "member-a": runtime, "member-b": runtime },
@@ -190,7 +195,11 @@ function openLocal(path: string) {
   child.unref();
 }
 
-export async function runPeerCommand(args: string[], io: Io): Promise<Result> {
+export async function runPeerCommand(
+  args: string[],
+  io: Io,
+  dependencies: { env?: Record<string, string | undefined> } = {}
+): Promise<Result> {
   const [subcommand = "", ...rest] = args;
   try {
     const options = parse(subcommand, rest);
@@ -200,7 +209,7 @@ export async function runPeerCommand(args: string[], io: Io): Promise<Result> {
       if (!question) throw new Error("peer start requires --question");
       const configPath = get(options, "config");
       if (!configPath) throw new Error("peer start requires --config");
-      const members = await loadPeerMembers(resolve(configPath));
+      const members = await loadPeerMembers(resolve(configPath), dependencies.env);
       const rounds = positive(get(options, "rounds"), "--rounds", 3);
       if (rounds < 2 || rounds > 3) throw new Error("Initial --rounds must be 2 or 3");
       const limits = {
@@ -224,6 +233,14 @@ export async function runPeerCommand(args: string[], io: Io): Promise<Result> {
         },
         await sources(list(options, "context"), 1)
       );
+      // Configuration/credentials are local errors: reject the pair before
+      // recording intents or giving one member a chance to dispatch.
+      for (const memberId of ["member-a", "member-b"] as const) {
+        const request = buildMemberRequest(state, memberId);
+        if (!(dependencies.env ?? process.env)[request.apiKeyEnv]?.trim())
+          throw new Error(`Environment variable ${request.apiKeyEnv} is not set`);
+        validatePeerApiRequest(request);
+      }
       io.log(`Session: ${sessionId}`);
       io.log(`Members: member-a ${members["member-a"].modelId}; member-b ${members["member-b"].modelId}`);
       io.log(`Sources: ${state.sources.map((x) => `${x.sourceId} (${x.lineCount} lines)`).join(", ") || "none"}`);
@@ -232,7 +249,7 @@ export async function runPeerCommand(args: string[], io: Io): Promise<Result> {
       );
       const ended = await fileStore.withWriter(sessionId, async (writer) => {
         await writer.commit(-1, state);
-        return drive(io, state, writer, "run", options);
+        return drive(io, state, writer, "run", options, dependencies.env);
       });
       printState(ended, io);
       return { ok: ended.status === "completed", code: ended.status === "completed" ? 0 : 2 };
@@ -246,7 +263,7 @@ export async function runPeerCommand(args: string[], io: Io): Promise<Result> {
       const ended = await fileStore.withWriter(sessionId, async (writer) => {
         const initial = await writer.load(sessionId);
         if (subcommand === "retry" && initial.status === "active") {
-          const recovered = await drive(io, initial, writer, "recover", options);
+          const recovered = await drive(io, initial, writer, "recover", options, dependencies.env);
           io.log(
             `Recovered interrupted session ${sessionId} without model calls. Run peer retry ${sessionId} again to resume.`
           );
@@ -256,7 +273,7 @@ export async function runPeerCommand(args: string[], io: Io): Promise<Result> {
             );
           return recovered;
         }
-        return drive(io, initial, writer, subcommand, options);
+        return drive(io, initial, writer, subcommand, options, dependencies.env);
       });
       printState(ended, io);
       return { ok: ended.status === "completed", code: ended.status === "completed" ? 0 : 2 };

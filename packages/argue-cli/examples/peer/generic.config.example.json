@@ -1,0 +1,22 @@
+{
+  "members": {
+    "member-a": {
+      "profile": "openai-compatible",
+      "baseUrl": "https://api.openai.com/v1",
+      "modelId": "your-openai-compatible-model",
+      "modelEnv": "PEER_A_MODEL_ID",
+      "apiKeyEnv": "PEER_A_API_KEY",
+      "outputMode": "json_object",
+      "generationOptions": {}
+    },
+    "member-b": {
+      "profile": "anthropic-compatible",
+      "baseUrl": "https://api.anthropic.com/v1",
+      "modelId": "your-anthropic-compatible-model",
+      "modelEnv": "PEER_B_MODEL_ID",
+      "apiKeyEnv": "PEER_B_API_KEY",
+      "outputMode": "prompt_json",
+      "generationOptions": {}
+    }
+  }
+}
