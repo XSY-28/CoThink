@@ -90,3 +90,5 @@ export {
   RoundAppliedMergeSchema,
   RoundRecordSchema
 } from "./contracts/result.js";
+
+export * from "./peer/index.js";
