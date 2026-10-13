@@ -8,3 +8,4 @@ export {
 } from "./protocol.js";
 export { buildMemberRequest, PeerTurnJsonSchemas, sharedPeerContext, peerSnapshotId } from "./context.js";
 export { buildPeerReport } from "./report.js";
+export * from "./driver.js";

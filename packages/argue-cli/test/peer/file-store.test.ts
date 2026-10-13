@@ -9,6 +9,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { FilePeerStore } from "../../src/peer/file-store.js";
 
 const sourceModule = pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), "../../src/peer/file-store.ts")).href;
+const driverModule = pathToFileURL(
+  join(dirname(fileURLToPath(import.meta.url)), "../../../argue/src/peer/driver.ts")
+).href;
+const repositoryRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../..");
 let root: string;
 
 function session(sessionId = "session-1", sources: ContextSourceInput[] = []): PeerSession {
@@ -259,8 +263,10 @@ describe("FilePeerStore", () => {
       expect(contender.code).not.toBe(0);
       expect(contender.stderr).toMatch(/lock|lease|writer/i);
     } finally {
-      child.kill("SIGKILL");
-      await new Promise((resolve) => child.once("exit", resolve));
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill("SIGKILL");
+        await new Promise((resolve) => child.once("exit", resolve));
+      }
     }
     await store.withWriter("session-1", async (writer) => {
       const loaded = await writer.load("session-1");
@@ -275,5 +281,81 @@ describe("FilePeerStore", () => {
     await writeFile(join(root, "session-1", ".writer.lock"), "{bad");
     await expect(store.withWriter("session-1", async () => {})).rejects.toThrow();
     expect((await store.load("session-1")).revision).toBe(0);
+  });
+
+  it("recovers killed driver intents as unknown without automatic re-dispatch", async () => {
+    const store = new FilePeerStore(root);
+    const initial = session();
+    await create(store, initial);
+    const childFile = join(root, "run-driver.ts");
+    await writeFile(
+      childFile,
+      `
+import { FilePeerStore } from ${JSON.stringify(sourceModule)};
+import { PeerSessionDriver } from ${JSON.stringify(driverModule)};
+const store = new FilePeerStore(${JSON.stringify(root)});
+await store.withWriter("session-1", async (writer) => {
+  const hanging = { respond: async () => new Promise(() => {}) };
+  const driver = new PeerSessionDriver(writer, { "member-a": hanging, "member-b": hanging }, {
+    now: () => new Date("2026-10-13T00:00:01.000Z"),
+    onCommitted: (state) => { if (state.attempts.length === 2) process.stdout.write("INTENTS\\n"); }
+  });
+  await driver.run("session-1");
+});
+`
+    );
+    const child = spawn(
+      join(repositoryRoot, "node_modules/.bin/vite-node"),
+      ["--script", "-c", join(repositoryRoot, "packages/argue-cli/vitest.config.ts"), childFile],
+      {
+        cwd: repositoryRoot,
+        stdio: ["ignore", "pipe", "pipe"]
+      }
+    );
+    let stderr = "";
+    child.stderr!.setEncoding("utf8").on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        child.once("error", reject);
+        child.stdout!.setEncoding("utf8").on("data", (chunk: string) => {
+          if (chunk.includes("INTENTS")) resolve();
+        });
+        child.once("exit", () => reject(new Error(`driver exited before intent: ${stderr}`)));
+      });
+      const persisted = await store.load("session-1");
+      expect(persisted.attempts).toHaveLength(2);
+      expect(persisted.attempts.every((attempt) => attempt.status === "running")).toBe(true);
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill("SIGKILL");
+        await new Promise((resolve) => child.once("exit", resolve));
+      }
+    }
+    let calls = 0;
+    await store.withWriter("session-1", async (writer) => {
+      const { PeerSessionDriver } = await import("@onevcat/argue");
+      const runtime = {
+        respond: async () => {
+          calls++;
+          throw new Error("must not dispatch");
+        }
+      };
+      const driver = new PeerSessionDriver(
+        writer,
+        { "member-a": runtime, "member-b": runtime },
+        {
+          now: () => new Date("2026-10-13T00:00:02.000Z")
+        }
+      );
+      const recovered = await driver.run("session-1");
+      expect(recovered.status).toBe("paused");
+      expect(recovered.attempts.every((attempt) => attempt.status === "unknown")).toBe(true);
+    });
+    expect(calls).toBe(0);
+    expect((await store.load("session-1")).attempts.every((attempt) => attempt.acceptance === "invalidated")).toBe(
+      true
+    );
   });
 });
