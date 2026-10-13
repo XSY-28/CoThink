@@ -1,9 +1,15 @@
 import { ARGUE_RESULT_VERSION } from "@onevcat/argue";
 import { describe, expect, it } from "vitest";
-import { validateArgueResult } from "../src/lib/validate.js";
+import { validateArgueResult, validateReportResult } from "../src/lib/validate.js";
 import { createFixtureResult } from "./fixtures.js";
 
 describe("validateArgueResult", () => {
+  it("routes peer.v1 through peer validation without requiring legacy representative fields", () => {
+    const peer = { kind: "peer", resultVersion: "peer.v1", question: "Q" };
+    const result = validateReportResult(peer);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain("schemaVersion");
+  });
   it("accepts a valid result", () => {
     const valid = createFixtureResult();
     const result = validateArgueResult(valid);

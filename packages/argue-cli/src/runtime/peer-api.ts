@@ -154,8 +154,13 @@ export function createPeerApiRuntime(env: Record<string, string | undefined> = p
           return response;
         }
       });
+      // The installed OpenAI-compatible SDK owns this field as `reasoningEffort`.
+      // Passing `reasoning_effort` through its generic option spread is overwritten
+      // by the SDK's own undefined mapping and never reaches the HTTP request.
+      const { reasoning_effort: reasoningEffort, ...otherGenerationOptions } = request.generationOptions;
       const providerOptions = {
-        ...request.generationOptions,
+        ...otherGenerationOptions,
+        ...(reasoningEffort === undefined ? {} : { reasoningEffort }),
         ...(request.outputMode === "json_object" ? { response_format: { type: "json_object" } } : {})
       };
       let result;

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { ArgueResult } from "@onevcat/argue";
+import type { ReportResult } from "./lib/validate.js";
 import { Landing } from "./components/Landing.js";
 import { ReportLayout } from "./components/ReportLayout.js";
+import { PeerReportView } from "./components/PeerReportView.js";
 import { SiteFooter } from "./components/SiteFooter.js";
 import { decodeHashPayload } from "./lib/decode-hash.js";
-import { validateArgueResult } from "./lib/validate.js";
+import { validateReportResult } from "./lib/validate.js";
 
 const EXAMPLE_URL = "examples/spaces-vs-tabs.json";
 const EXAMPLE_SOURCE = "example:spaces-vs-tabs";
@@ -14,10 +15,10 @@ type Route = "home" | "example" | "report";
 type ViewState =
   | { kind: "idle" }
   | { kind: "loading-example" }
-  | { kind: "loaded"; source: string; result: ArgueResult }
+  | { kind: "loaded"; source: string; result: ReportResult }
   | { kind: "error"; source: string; error: string };
 
-type CachedReport = { source: string; result: ArgueResult };
+type CachedReport = { source: string; result: ReportResult };
 
 function routeFromPath(pathname: string): Route {
   const normalized = pathname.replace(/\/+$/, "") || "/";
@@ -59,7 +60,7 @@ export function App() {
 
   // Parse + validate JSON text and update state. Returns the parsed
   // result on success so the caller can cache it per-route.
-  const applyText = (text: string, source: string): ArgueResult | null => {
+  const applyText = (text: string, source: string): ReportResult | null => {
     if (!text.trim()) {
       setState({ kind: "error", source, error: "Input is empty." });
       return null;
@@ -72,7 +73,7 @@ export function App() {
       setState({ kind: "error", source, error: `Cannot parse JSON: ${message}` });
       return null;
     }
-    const validation = validateArgueResult(raw);
+    const validation = validateReportResult(raw);
     if (!validation.ok) {
       setState({ kind: "error", source, error: validation.error });
       return null;
@@ -208,7 +209,11 @@ export function App() {
   return (
     <div className={shellClass}>
       {state.kind === "loaded" ? (
-        <ReportLayout result={state.result} onReset={reset} />
+        state.result.resultVersion === "peer.v1" ? (
+          <PeerReportView result={state.result} onReset={reset} />
+        ) : (
+          <ReportLayout result={state.result} onReset={reset} />
+        )
       ) : (
         <Landing
           error={state.kind === "error" ? { source: state.source, message: state.error } : null}

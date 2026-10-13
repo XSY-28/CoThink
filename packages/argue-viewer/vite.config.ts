@@ -12,13 +12,13 @@ const arguePkg = JSON.parse(readFileSync(resolve(__dirname, "../argue/package.js
   version: string;
 };
 
-// The viewer only needs schemas and types from `@onevcat/argue`, not the
+// The viewer only needs browser-safe result schemas and types from `@onevcat/argue`, not the
 // engine. The engine imports `node:crypto` which Vite externalises in the
 // browser bundle, and accessing `randomUUID` on the external proxy throws
 // `Module "node:crypto" has been externalized for browser compatibility`.
 //
-// To keep the browser bundle safe we alias the whole package to the single
-// schema source file (src/contracts/result.ts) — this bypasses index.ts and
+// To keep the browser bundle safe we alias the whole package to the browser
+// schema entry (src/browser.ts) — this bypasses index.ts and
 // never pulls engine.ts into the graph.
 //
 // `optimizeDeps.exclude` is load-bearing: without it Vite's dep scanner may
@@ -33,7 +33,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@onevcat/argue": resolve(__dirname, "../argue/src/contracts/result.ts")
+      "@onevcat/argue": resolve(__dirname, "../argue/src/browser.ts")
     }
   },
   optimizeDeps: {

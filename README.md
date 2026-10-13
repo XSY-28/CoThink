@@ -30,6 +30,22 @@ Once installed, just ask your agent to "argue about X" or "get a second opinion 
 
 ## Quick Start
 
+### Local peer mode in this unreleased checkout
+
+This fork also has a separate two-member `peer` path. Both members see the same copied sources, reply in synchronized rounds, and assess every active claim. A paused or divided discussion stays visible; the local report does not select a representative or winner. This work is available from this checkout after `npm ci && npm run build`; the published `@onevcat/argue-cli` package does not include it yet.
+
+See [peer setup, commands and limits](docs/peer/MVP.md) and the [validation ledger](docs/peer/VALIDATION.md). A typical local entry is:
+
+```bash
+node --env-file=.env packages/argue-cli/dist/cli.js peer start \
+  --question "How should a reminder recover after a crash?" \
+  --context examples/peer/scenarios/omitted-condition.md \
+  --config peer.config.json \
+  --max-output-tokens 8192
+```
+
+It uses API keys from environment variables named by the config. Exported Markdown, JSON and HTML stay local; HTML opens offline. The provider profiles are DeepSeek/GLM OpenAI-compatible APIs. GPT/Claude have not been verified for this peer protocol.
+
 Prefer driving the CLI yourself like a cave-dweller with a stone axe? Suit yourself — here's the manual route.
 
 ### Install

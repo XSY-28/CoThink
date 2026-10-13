@@ -2,6 +2,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/pr
 import { gzipSync } from "node:zlib";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App.js";
+import { createPeerSession } from "../../argue/src/peer/protocol.js";
+import { buildPeerReport } from "../../argue/src/peer/report.js";
 import { createFixtureResult } from "./fixtures.js";
 
 beforeEach(() => {
@@ -36,6 +38,41 @@ async function dropJsonText(text: string, filename = "result.json") {
 }
 
 describe("App", () => {
+  it("loads a valid peer export through the same local drop target", async () => {
+    render(<App />);
+    const state = createPeerSession({
+      sessionId: "peer-import",
+      schemaVersion: 1,
+      question: "A peer question",
+      sourceCommit: "local",
+      createdAt: "2026-10-13T00:00:00.000Z",
+      members: [
+        {
+          id: "member-a",
+          protocol: "openai-compatible",
+          baseUrl: "https://example.test",
+          modelId: "a",
+          apiKeyEnv: "A",
+          outputMode: "json_object",
+          generationOptions: {}
+        },
+        {
+          id: "member-b",
+          protocol: "openai-compatible",
+          baseUrl: "https://example.test",
+          modelId: "b",
+          apiKeyEnv: "B",
+          outputMode: "json_object",
+          generationOptions: {}
+        }
+      ]
+    });
+    state.status = "paused";
+    await dropJsonText(JSON.stringify(buildPeerReport(state)));
+    await waitFor(() => expect(screen.getByText("A peer question")).toBeTruthy());
+    expect(document.body.textContent).toContain("Incomplete review");
+    expect(document.body.textContent).not.toContain("representative");
+  });
   it("renders the landing hero on mount", () => {
     render(<App />);
     expect(screen.getByText("Argue")).toBeTruthy();

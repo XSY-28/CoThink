@@ -24,7 +24,7 @@ describe("peer provider configuration", () => {
       modelId: "account-glm",
       apiKeyEnv: "GLM_API_KEY",
       outputMode: "json_object",
-      generationOptions: { thinking: { type: "enabled" } }
+      generationOptions: { thinking: { type: "enabled" }, reasoning_effort: "low" }
     });
   });
 
@@ -52,6 +52,19 @@ describe("peer provider configuration", () => {
         {}
       )
     ).toThrow();
+  });
+
+  it("allows an explicit GLM reasoning effort override in a new session", () => {
+    const members = normalizePeerMembers(
+      {
+        members: {
+          "member-a": {},
+          "member-b": { generationOptions: { reasoning_effort: "high" } }
+        }
+      },
+      {}
+    );
+    expect(members["member-b"].generationOptions).toEqual({ thinking: { type: "enabled" }, reasoning_effort: "high" });
   });
 
   it("rejects an unset explicit model environment variable", () => {

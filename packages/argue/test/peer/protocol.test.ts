@@ -440,7 +440,7 @@ describe("peer frozen protocol", () => {
     expect(() => peer.validateMemberReply(changedEnv, old)).toThrow(/input hash/i);
   });
   it("rejects a promptVersion that does not select the implemented protocol text", () => {
-    expect(peer.SessionConfigInputSchema.safeParse({ ...config(), promptVersion: "peer-v2" }).success).toBe(false);
+    expect(peer.SessionConfigInputSchema.safeParse({ ...config(), promptVersion: "peer-v5" }).success).toBe(false);
   });
   it("persists strict session/report shapes after an alternative proposal and verifies copied-source SHA-256", () => {
     let state = opened();

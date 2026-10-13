@@ -1,6 +1,14 @@
-import { ARGUE_RESULT_VERSION, ArgueResultSchema, type ArgueResult } from "@onevcat/argue";
+import {
+  ARGUE_RESULT_VERSION,
+  ArgueResultSchema,
+  PeerResultV1Schema,
+  type ArgueResult,
+  type PeerResultV1
+} from "@onevcat/argue";
 
 export type ValidationResult = { ok: true; data: ArgueResult } | { ok: false; error: string };
+export type ReportResult = ArgueResult | PeerResultV1;
+export type ReportValidationResult = { ok: true; data: ReportResult } | { ok: false; error: string };
 
 function describePath(path: (string | number)[]): string {
   if (path.length === 0) {
@@ -49,4 +57,22 @@ export function validateArgueResult(input: unknown): ValidationResult {
   }
 
   return { ok: true, data: parsed.data };
+}
+
+export function validateReportResult(input: unknown): ReportValidationResult {
+  if (
+    input &&
+    typeof input === "object" &&
+    !Array.isArray(input) &&
+    (input as Record<string, unknown>).resultVersion === "peer.v1"
+  ) {
+    const parsed = PeerResultV1Schema.safeParse(input);
+    if (parsed.success) return { ok: true, data: parsed.data };
+    const first = parsed.error.issues[0];
+    return {
+      ok: false,
+      error: first ? `Schema mismatch at ${describePath(first.path)}: ${first.message}` : "Peer validation failed."
+    };
+  }
+  return validateArgueResult(input);
 }

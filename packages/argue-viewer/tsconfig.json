@@ -10,7 +10,7 @@
     "types": ["vite/client", "vitest/globals"],
     "baseUrl": ".",
     "paths": {
-      "@onevcat/argue": ["../argue/src/contracts/result.ts"]
+      "@onevcat/argue": ["../argue/src/browser.ts"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts", "test/**/*.tsx", "vite.config.ts"]

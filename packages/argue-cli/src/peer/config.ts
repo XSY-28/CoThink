@@ -35,7 +35,7 @@ const profiles = {
     modelId: "glm-5.3-flash",
     modelEnv: "GLM_MODEL_ID",
     apiKeyEnv: "GLM_API_KEY",
-    generationOptions: { thinking: { type: "enabled" } }
+    generationOptions: { thinking: { type: "enabled" }, reasoning_effort: "low" }
   }
 } as const;
 

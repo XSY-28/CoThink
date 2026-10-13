@@ -18,6 +18,7 @@ import {
 } from "./config.js";
 import { executeHeadlessRun } from "./headless-run.js";
 import { createOutputFormatter } from "./output.js";
+import { runPeerCommand } from "./peer/commands.js";
 import { loadRunInput } from "./run-input.js";
 import { defaultOutputDirTemplate, resolveRunPlan } from "./run-plan.js";
 import { createTaskDelegate } from "./runtime/delegate.js";
@@ -112,6 +113,10 @@ export async function runCli(argv: string[], io: Pick<typeof console, "log" | "e
 
   if (command === "run" || command === "exec") {
     return runHeadless(rest, io);
+  }
+
+  if (command === "peer") {
+    return runPeerCommand(rest, io);
   }
 
   if (command === "config") {
@@ -1435,6 +1440,7 @@ function printHelp(io: Pick<typeof console, "log">): void {
   io.log("");
   io.log("Usage:");
   io.log("  argue run|exec [options]        # run a debate session");
+  io.log("  argue peer start|show|retry|continue|export|view ...  # local peer session");
   io.log("  argue view [request-id]       # open a completed run in the hosted viewer");
   io.log(
     "  argue act --result <path> --task <prompt> [--agent <id>] [--config <path>] [--no-action-full-result] [--no-color]"

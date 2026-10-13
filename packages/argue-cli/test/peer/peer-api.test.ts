@@ -99,6 +99,15 @@ describe("peer API transport", () => {
     });
   });
 
+  it("passes a frozen GLM reasoning_effort option through the real HTTP request", async () => {
+    const local = await localServer(() => ({ body: completion(validContent) }));
+    await runtime.respond(
+      request(local.baseUrl, { generationOptions: { thinking: { type: "enabled" }, reasoning_effort: "low" } }),
+      new AbortController().signal
+    );
+    expect(local.requests[0]).toMatchObject({ thinking: { type: "enabled" }, reasoning_effort: "low" });
+  });
+
   it("omits response_format in prompt_json mode and sends only the supplied turn", async () => {
     const local = await localServer(() => ({ body: completion(validContent) }));
     await runtime.respond(

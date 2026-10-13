@@ -16,7 +16,7 @@
       "modelEnv": "GLM_MODEL_ID",
       "apiKeyEnv": "GLM_API_KEY",
       "outputMode": "json_object",
-      "generationOptions": { "thinking": { "type": "enabled" } }
+      "generationOptions": { "thinking": { "type": "enabled" }, "reasoning_effort": "low" }
     }
   }
 }
