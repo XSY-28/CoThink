@@ -1,0 +1,22 @@
+{
+  "members": {
+    "member-a": {
+      "profile": "deepseek",
+      "baseUrl": "https://api.deepseek.com",
+      "modelId": "deepseek-flash",
+      "modelEnv": "DEEPSEEK_MODEL_ID",
+      "apiKeyEnv": "DEEPSEEK_API_KEY",
+      "outputMode": "json_object",
+      "generationOptions": { "thinking": { "type": "disabled" } }
+    },
+    "member-b": {
+      "profile": "glm",
+      "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+      "modelId": "glm-5.3-flash",
+      "modelEnv": "GLM_MODEL_ID",
+      "apiKeyEnv": "GLM_API_KEY",
+      "outputMode": "json_object",
+      "generationOptions": { "thinking": { "type": "enabled" } }
+    }
+  }
+}
