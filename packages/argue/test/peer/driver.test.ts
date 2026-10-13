@@ -52,6 +52,20 @@ const makeDriver = (
 ) => new PeerSessionDriver(store, runtimes(respond), { now: () => new Date(NOW) });
 
 describe("PeerSessionDriver", () => {
+  it("recovers an active snapshot between commits into a durable pause without calls", async () => {
+    const store = new MemoryStore(makeSession());
+    let calls = 0;
+    const driver = makeDriver(store, async (request) => {
+      calls++;
+      return reply(request, opening(request.memberId));
+    });
+    const recovered = await driver.recover(store.state.config.sessionId);
+    expect(recovered.status).toBe("paused");
+    expect(recovered.pauseReason?.code).toBe("recovered_interrupted");
+    expect(recovered.revision).toBe(1);
+    expect(recovered.attempts).toHaveLength(0);
+    expect(calls).toBe(0);
+  });
   it("durably records both attempts before dispatch and seals the first answer without advancing", async () => {
     const store = new MemoryStore(makeSession());
     let releaseB!: (value: RuntimeReply) => void;

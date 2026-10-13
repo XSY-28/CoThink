@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildPeerReport, createPeerSession } from "@onevcat/argue";
+import { buildMemberRequest, buildPeerReport, createPeerSession, type MemberRequest } from "@onevcat/argue";
 import prettier from "prettier";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { runCli } from "../../src/index.js";
@@ -242,6 +242,191 @@ it("rejects missing start input before a network request", async () => {
   await writeFile(config, "{}", "utf8");
   expect((await runCli(["peer", "start", "--config", config, "--root", root], io)).ok).toBe(false);
   expect(errors.join("\n")).toContain("--question");
+});
+
+function activeSession(sessionId: string, baseUrl: string) {
+  return createPeerSession({
+    sessionId,
+    schemaVersion: 1,
+    question: "Crash recovery?",
+    sourceCommit: "local-test",
+    createdAt: new Date().toISOString(),
+    members: [
+      {
+        id: "member-a",
+        protocol: "openai-compatible",
+        baseUrl,
+        modelId: "a",
+        apiKeyEnv: "FAKE_PEER_A",
+        outputMode: "json_object",
+        generationOptions: {}
+      },
+      {
+        id: "member-b",
+        protocol: "openai-compatible",
+        baseUrl,
+        modelId: "b",
+        apiKeyEnv: "FAKE_PEER_B",
+        outputMode: "json_object",
+        generationOptions: {}
+      }
+    ]
+  });
+}
+function frozen(request: MemberRequest) {
+  const {
+    messages,
+    outputSchema,
+    outputMode,
+    maxOutputTokens,
+    modelId,
+    protocol,
+    baseUrl,
+    apiKeyEnv,
+    generationOptions
+  } = request;
+  return {
+    messages,
+    outputSchema,
+    outputMode,
+    maxOutputTokens,
+    modelId,
+    protocol,
+    baseUrl,
+    apiKeyEnv,
+    generationOptions
+  };
+}
+
+it("first CLI retry recovers active sealed/running snapshot with zero calls; second explicit retry reuses seal/hash", async () => {
+  const requests: Array<{ model: string; phase: string }> = [];
+  server = createServer(async (req, res) => {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) chunks.push(Buffer.from(chunk));
+    const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as {
+      model: string;
+      messages: Array<{ content: string }>;
+    };
+    const phase = (JSON.parse(body.messages.at(-1)!.content) as { phase: string }).phase;
+    requests.push({ model: body.model, phase });
+    const payload =
+      phase === "opening"
+        ? { phase, conclusion: body.model, evidenceRequests: [], claims: [] }
+        : { phase, conclusion: body.model, evidenceRequests: [], actions: [], readyToReview: true };
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(
+      JSON.stringify({
+        id: "local",
+        object: "chat.completion",
+        created: 1,
+        model: body.model,
+        choices: [{ index: 0, message: { role: "assistant", content: JSON.stringify(payload) }, finish_reason: "stop" }]
+      })
+    );
+  });
+  await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("No local port");
+  const sessionId = "crashed-sealed";
+  const state = activeSession(sessionId, `http://127.0.0.1:${address.port}/v1`);
+  const a = buildMemberRequest(state, "member-a");
+  const b = buildMemberRequest(state, "member-b");
+  const now = new Date().toISOString();
+  state.jobs.push(
+    {
+      jobId: a.jobId,
+      memberId: "member-a",
+      segmentId: 1,
+      roundIndex: 0,
+      phase: "opening",
+      snapshotId: a.snapshotId,
+      inputHash: a.inputHash,
+      status: "sealed",
+      frozenInput: frozen(a),
+      sealedReply: {
+        memberId: "member-a",
+        jobId: a.jobId,
+        snapshotId: a.snapshotId,
+        inputHash: a.inputHash,
+        payload: { phase: "opening", conclusion: "a", evidenceRequests: [], claims: [] }
+      }
+    },
+    {
+      jobId: b.jobId,
+      memberId: "member-b",
+      segmentId: 1,
+      roundIndex: 0,
+      phase: "opening",
+      snapshotId: b.snapshotId,
+      inputHash: b.inputHash,
+      status: "running",
+      activeAttemptId: "attempt-before-crash",
+      frozenInput: frozen(b)
+    }
+  );
+  state.attempts.push(
+    {
+      jobId: a.jobId,
+      attemptId: "sealed-before-crash",
+      inputHash: a.inputHash,
+      memberId: "member-a",
+      status: "valid",
+      startedAt: now,
+      deadline: state.segments[0]!.deadline,
+      acceptance: "accepted",
+      cancellation: "none"
+    },
+    {
+      jobId: b.jobId,
+      attemptId: "attempt-before-crash",
+      inputHash: b.inputHash,
+      memberId: "member-b",
+      status: "running",
+      startedAt: now,
+      deadline: state.segments[0]!.deadline,
+      acceptance: "active",
+      cancellation: "none"
+    }
+  );
+  const store = new FilePeerStore(root);
+  await store.withWriter(sessionId, (writer) => writer.commit(-1, state));
+  process.env.FAKE_PEER_B = "fake-b";
+  const first = await runCli(["peer", "retry", sessionId, "--root", root, "--extra-calls", "2"], io);
+  expect(first.code).toBe(2);
+  expect(requests).toHaveLength(0);
+  const recovered = await store.load(sessionId);
+  expect(recovered.status).toBe("paused");
+  expect(recovered.pauseReason?.code).toBe("recovered_unknown");
+  expect(recovered.jobs.find((job) => job.memberId === "member-a")?.status).toBe("sealed");
+  expect(recovered.attempts.find((attempt) => attempt.memberId === "member-b")?.status).toBe("unknown");
+  expect(recovered.segments[0]!.maxCalls).toBe(12);
+  expect(logs.join("\n")).toContain("repeat --extra-calls/--extend-seconds");
+  process.env.FAKE_PEER_A = "fake-a";
+  const second = await runCli(["peer", "retry", sessionId, "--root", root, "--extra-calls", "2"], io);
+  expect(errors).toEqual([]);
+  expect(second.ok).toBe(true);
+  expect(requests.filter((request) => request.phase === "opening")).toEqual([{ model: "b", phase: "opening" }]);
+  const complete = await store.load(sessionId);
+  expect(complete.status).toBe("completed");
+  expect(complete.segments[0]!.maxCalls).toBe(14);
+  expect(complete.attempts.find((attempt) => attempt.attemptId === "attempt-before-crash")?.inputHash).toBe(
+    b.inputHash
+  );
+  expect(complete.attempts.filter((attempt) => attempt.jobId === b.jobId).at(-1)?.inputHash).toBe(b.inputHash);
+  expect(complete.rounds[0]!.replies.find((reply) => reply.memberId === "member-a")?.payload.conclusion).toBe("a");
+});
+
+it("first CLI retry of active snapshot between commits pauses without dispatch", async () => {
+  const sessionId = "crashed-between-rounds";
+  const store = new FilePeerStore(root);
+  await store.withWriter(sessionId, (writer) => writer.commit(-1, activeSession(sessionId, "https://example.test")));
+  const first = await runCli(["peer", "retry", sessionId, "--root", root], io);
+  expect(first.code).toBe(2);
+  const recovered = await store.load(sessionId);
+  expect(recovered.status).toBe("paused");
+  expect(recovered.pauseReason?.code).toBe("recovered_interrupted");
+  expect(recovered.attempts).toHaveLength(0);
+  expect(recovered.events.at(-1)?.type).toBe("SessionPaused");
 });
 
 it("runs a real local HTTP CLI session through failure, retry, continuation and export", async () => {

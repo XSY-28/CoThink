@@ -152,31 +152,39 @@ export class PeerSessionDriver {
     return this.commit(state, next);
   }
 
+  /** Recover a saved active state after its writer process has ended; never dispatches. */
+  async recover(sessionId: string): Promise<PeerSession> {
+    const state = await this.store.load(sessionId);
+    if (state.status !== "active") throw new Error("Only an active peer session can recover");
+    const next = structuredClone(state);
+    let unknownCount = 0;
+    for (const attempt of next.attempts.filter((candidate) => candidate.status === "running")) {
+      unknownCount++;
+      attempt.status = "unknown";
+      attempt.acceptance = "invalidated";
+      attempt.cancellation = "unknown";
+      attempt.endedAt = asIso(this.now());
+      const job = next.jobs.find((candidate) => candidate.jobId === attempt.jobId);
+      if (job) job.status = "unknown";
+      this.event(next, "AttemptUnknown", {}, attempt.jobId, attempt.attemptId);
+    }
+    next.status = "paused";
+    next.pauseReason = unknownCount
+      ? { code: "recovered_unknown", message: "An interrupted call may have reached the provider", retryable: true }
+      : {
+          code: "recovered_interrupted",
+          message: "Previous process stopped between durable commits; explicit retry required",
+          retryable: true
+        };
+    this.event(next, "SessionPaused", { code: next.pauseReason.code });
+    return this.commit(state, next);
+  }
+
   async run(sessionId: string, signal?: AbortSignal): Promise<PeerSession> {
     let state = await this.store.load(sessionId);
     if (state.status !== "active")
       throw new Error("Only an active peer session can run; use retry for paused sessions");
-    const orphaned = state.attempts.filter((attempt) => attempt.status === "running");
-    if (orphaned.length) {
-      const next = structuredClone(state);
-      for (const attempt of next.attempts.filter((candidate) => candidate.status === "running")) {
-        attempt.status = "unknown";
-        attempt.acceptance = "invalidated";
-        attempt.cancellation = "unknown";
-        attempt.endedAt = asIso(this.now());
-        const job = next.jobs.find((candidate) => candidate.jobId === attempt.jobId);
-        if (job) job.status = "unknown";
-        this.event(next, "AttemptUnknown", {}, attempt.jobId, attempt.attemptId);
-      }
-      next.status = "paused";
-      next.pauseReason = {
-        code: "recovered_unknown",
-        message: "An interrupted call may have reached the provider",
-        retryable: true
-      };
-      this.event(next, "SessionPaused", { code: "recovered_unknown" });
-      return this.commit(state, next);
-    }
+    if (state.attempts.some((attempt) => attempt.status === "running")) return this.recover(sessionId);
     while (state.status === "active") {
       if (signal?.aborted) return this.pause(state, { code: "cancelled", message: "Run cancelled", retryable: true });
       const segment = currentSegment(state);

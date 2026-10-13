@@ -117,7 +117,7 @@ async function drive(
   io: Io,
   initial: PeerSession,
   store: PeerStore,
-  mode: "run" | "retry" | "continue",
+  mode: "run" | "recover" | "retry" | "continue",
   options: Options
 ): Promise<PeerSession> {
   const controller = new AbortController();
@@ -134,6 +134,7 @@ async function drive(
       { onCommitted: observer(io, initial) }
     );
     if (mode === "run") return await driver.run(initial.config.sessionId, controller.signal);
+    if (mode === "recover") return await driver.recover(initial.config.sessionId);
     if (mode === "retry")
       return await driver.retry(initial.config.sessionId, {
         extraCalls: nonnegative(get(options, "extra-calls"), "--extra-calls"),
@@ -244,6 +245,17 @@ export async function runPeerCommand(args: string[], io: Io): Promise<Result> {
     if (subcommand === "retry" || subcommand === "continue") {
       const ended = await fileStore.withWriter(sessionId, async (writer) => {
         const initial = await writer.load(sessionId);
+        if (subcommand === "retry" && initial.status === "active") {
+          const recovered = await drive(io, initial, writer, "recover", options);
+          io.log(
+            `Recovered interrupted session ${sessionId} without model calls. Run peer retry ${sessionId} again to resume.`
+          );
+          if (get(options, "extra-calls") !== undefined || get(options, "extend-seconds") !== undefined)
+            io.log(
+              "Budget extensions were not applied during recovery; repeat --extra-calls/--extend-seconds on the next retry if needed."
+            );
+          return recovered;
+        }
         return drive(io, initial, writer, subcommand, options);
       });
       printState(ended, io);

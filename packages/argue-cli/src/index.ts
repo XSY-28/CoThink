@@ -1441,6 +1441,9 @@ function printHelp(io: Pick<typeof console, "log">): void {
   io.log("Usage:");
   io.log("  argue run|exec [options]        # run a debate session");
   io.log("  argue peer start|show|retry|continue|export|view ...  # local peer session");
+  io.log(
+    "    peer retry on an interrupted active session first saves a pause with no model calls; run it again to resume"
+  );
   io.log("  argue view [request-id]       # open a completed run in the hosted viewer");
   io.log(
     "  argue act --result <path> --task <prompt> [--agent <id>] [--config <path>] [--no-action-full-result] [--no-color]"
