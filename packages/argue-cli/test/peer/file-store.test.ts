@@ -8,7 +8,9 @@ import { createPeerSession, type ContextSourceInput, type PeerSession } from "@o
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { FilePeerStore } from "../../src/peer/file-store.js";
 
-const sourceModule = pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), "../../src/peer/file-store.ts")).href;
+// Subprocesses exercise the built adapter: native Node cannot resolve the .js
+// imports in the TypeScript source graph. Build before running these tests.
+const sourceModule = pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), "../../dist/peer/file-store.js")).href;
 const driverModule = pathToFileURL(
   join(dirname(fileURLToPath(import.meta.url)), "../../../argue/src/peer/driver.ts")
 ).href;

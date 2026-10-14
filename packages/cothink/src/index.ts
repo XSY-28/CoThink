@@ -2,11 +2,13 @@ import { access } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { MemberId, MemberRuntime } from "@onevcat/argue";
 import metadata from "../package.json" with { type: "json" };
-import { runPeerCommand } from "../../argue-cli/src/peer/commands.js";
+import { runPeerCommand, peerSessionTarget } from "../../argue-cli/src/peer/commands.js";
 import { loadPeerMembers } from "../../argue-cli/src/peer/config.js";
 import { testPeerConnections } from "../../argue-cli/src/peer/diagnostics.js";
 import { DEFAULT_PEER_CONFIG, DEFAULT_PEER_ENV, readPeerEnvironment } from "../../argue-cli/src/peer/local-config.js";
 import { setupPeerConfig, type PeerPrompt } from "../../argue-cli/src/peer/setup.js";
+
+import { loadStoredSessionIdentity } from "../../argue-cli/src/storage/session-routing.js";
 
 type Io = Pick<Console, "log" | "error">;
 export interface CoThinkOptions {
@@ -162,6 +164,12 @@ export async function runCoThink(
     }
     if (command === "start" && !args.includes("--config")) args.push("--config", resolve(DEFAULT_PEER_CONFIG));
     if (!args.includes("--root")) args.push("--root", resolve(".cothink/sessions"));
+    if (command !== "start") {
+      const target = peerSessionTarget([command, ...args])!;
+      const session = await loadStoredSessionIdentity(target.root, target.sessionId);
+      if (session.kind === "discussion")
+        throw Error("Discussion schemaVersion 2 is recognized; discussion commands are not implemented in stage 0.");
+    }
     const env = ["start", "retry", "continue"].includes(command)
       ? await environment(envPath, explicitEnv, base)
       : { ...base };

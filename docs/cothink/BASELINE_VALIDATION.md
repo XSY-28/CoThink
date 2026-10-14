@@ -36,3 +36,9 @@ The lockfile is preserved for a reproducible baseline; these findings have not b
 The source CI workflow checks Node.js 22 and 24 on Ubuntu, including lint, formatting, typechecking, build, tests and both packaging checks. Its definition alone is not a successful run. Inspect the [Actions results](https://github.com/XSY-28/CoThink/actions) for the uploaded commit.
 
 No npm publication, GitHub Release or deployment is part of this baseline upload.
+
+## Stage 0 revalidation
+
+On 2026-10-13, the uploaded `af34aac` baseline was cloned with a clean working tree and rechecked on the same Node.js 24.19.0 / npm 11.17.0 macOS environment. Install, build, check, lint, formatting and both package smoke checks passed. The first test run had 621 passing tests and one existing random request-ID collision (999 distinct IDs out of 1000); a full rerun before source changes passed all 622. The collision remains unresolved, rather than being counted as fixed by a rerun.
+
+Stage 0 captures synthetic frozen requests and a paused peer-v5 snapshot for compatibility tests. The extraction and its fresh validation evidence are recorded in [discussion-progress.md](../plan/discussion-progress.md). No real model API, push, publication or deployment was performed.
