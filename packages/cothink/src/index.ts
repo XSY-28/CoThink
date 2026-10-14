@@ -1,18 +1,20 @@
 import { access } from "node:fs/promises";
 import { resolve } from "node:path";
-import type { MemberId, MemberRuntime } from "@onevcat/argue";
+import type { MemberId, MemberRuntime, ModelTransport } from "@onevcat/argue";
 import metadata from "../package.json" with { type: "json" };
-import { runPeerCommand } from "../../argue-cli/src/peer/commands.js";
-import { loadPeerMembers } from "../../argue-cli/src/peer/config.js";
+import { runDiscussionCommand } from "../../argue-cli/src/discussion/commands.js";
+import { loadDiscussionConfig } from "../../argue-cli/src/discussion/config.js";
 import { testPeerConnections } from "../../argue-cli/src/peer/diagnostics.js";
 import { DEFAULT_PEER_CONFIG, DEFAULT_PEER_ENV, readPeerEnvironment } from "../../argue-cli/src/peer/local-config.js";
-import { setupPeerConfig, type PeerPrompt } from "../../argue-cli/src/peer/setup.js";
+import { setupDiscussionConfig, type PeerPrompt } from "../../argue-cli/src/peer/setup.js";
 
 type Io = Pick<Console, "log" | "error">;
 export interface CoThinkOptions {
   env?: Record<string, string | undefined>;
   prompt?: PeerPrompt;
   runtime?: MemberRuntime;
+  transport?: ModelTransport;
+  now?: () => number;
 }
 const commands = new Set(["start", "show", "retry", "continue", "export", "view"]);
 
@@ -28,11 +30,16 @@ function help(io: Io) {
     "       [--timeout-ms N] [--max-output-tokens N]       Up to 4 model requests, no retries; connection and structure only."
   );
   io.log(
-    "  start --question TEXT [--config FILE] [--env-file FILE] [--rounds 2|3] [--max-calls N] [--max-output-tokens N]"
+    "  start (--question TEXT | --question-file FILE) [--config FILE] [--env-file FILE] [--context FILE] [--effort low|standard|high] [--max-rounds N]"
   );
-  io.log("  show SESSION_ID | retry SESSION_ID | continue SESSION_ID --note TEXT");
-  io.log("  export SESSION_ID --format md|json|html [--output FILE] | view SESSION_ID [--no-open]");
-  io.log("  All discussion commands accept --root DIR. retry also accepts --extra-calls N / --extend-seconds N.");
+  io.log("  start/continue: --participation-weight member-a=2 --decision-weight member-b=3 (weights are independent).");
+  io.log("  show SESSION_ID | retry SESSION_ID | continue SESSION_ID [--note TEXT] [--effort ...] [--max-rounds N]");
+  io.log("  export SESSION_ID --format txt|md|json|html [--output FILE] | view SESSION_ID [--no-open]");
+  io.log("  All session commands accept --json: one FinalResult object; discussion stays private.");
+  io.log("  Precedence: CLI flags > config > defaults. Read/show/view/export need no keys and make no model calls.");
+  io.log(
+    "  All session commands accept --root DIR. retry: --extra-calls N / --extra-output-tokens N / --extend-seconds N."
+  );
   io.log(
     "  Defaults: .cothink/config.json, .cothink/keys.env, .cothink/sessions. Process environment overrides the key file."
   );
@@ -100,7 +107,7 @@ export async function runCoThink(
       if (isSetup) {
         // New setup may create this path; read it only when it already exists.
         const env = await environment(envPath, false, base);
-        await setupPeerConfig({
+        await setupDiscussionConfig({
           configPath,
           envPath,
           env,
@@ -116,7 +123,7 @@ export async function runCoThink(
       const timeoutMs = positive(values.get("timeout-ms"), 30000);
       const maxOutputTokens = positive(values.get("max-output-tokens"), 2048);
       const env = await environment(envPath, values.has("env-file"), base);
-      const members = await loadPeerMembers(configPath, env);
+      const { members } = await loadDiscussionConfig(configPath, env);
       if (!flags.has("json"))
         io.log(
           `Testing ${member ?? "both members"}: up to ${member ? 2 : 4} API requests; ${timeoutMs}ms and ${maxOutputTokens} output tokens per request; no retries.`
@@ -149,23 +156,12 @@ export async function runCoThink(
       }
     }
     if (!commands.has(command)) throw Error(`Unknown CoThink command: ${command}. Use cothink --help.`);
-    const args: string[] = [];
-    let envPath = resolve(DEFAULT_PEER_ENV),
-      explicitEnv = false;
-    for (let i = 0; i < rest.length; i++) {
-      if (rest[i] === "--env-file") {
-        const path = rest[++i];
-        if (!path || path.startsWith("--")) throw Error("Missing value for --env-file");
-        envPath = resolve(path);
-        explicitEnv = true;
-      } else args.push(rest[i]!);
-    }
-    if (command === "start" && !args.includes("--config")) args.push("--config", resolve(DEFAULT_PEER_CONFIG));
-    if (!args.includes("--root")) args.push("--root", resolve(".cothink/sessions"));
-    const env = ["start", "retry", "continue"].includes(command)
-      ? await environment(envPath, explicitEnv, base)
-      : { ...base };
-    return await runPeerCommand([command, ...args], io, { env });
+    return await runDiscussionCommand([command, ...rest], io, {
+      env: base,
+      transport: dependencies.transport,
+      legacyRuntime: dependencies.runtime,
+      now: dependencies.now
+    });
   } catch (error) {
     io.error(error instanceof Error ? error.message : String(error));
     return { ok: false, code: 1 };

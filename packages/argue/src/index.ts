@@ -92,3 +92,7 @@ export {
 } from "./contracts/result.js";
 
 export * from "./peer/index.js";
+
+export * from "./discussion/index.js";
+export * from "./transport/contracts.js";
+export { identifyStoredSession, type StoredSessionIdentity } from "./session-format.js";

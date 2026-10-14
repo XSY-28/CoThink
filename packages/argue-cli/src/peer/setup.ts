@@ -1,5 +1,6 @@
 import { createInterface } from "node:readline";
 import { Writable } from "node:stream";
+import { parseDiscussionConfig, type DiscussionConfigPolicy } from "../discussion/config.js";
 import { normalizePeerMembers, peerProfiles } from "./config.js";
 import { writeSetupFiles } from "./local-config.js";
 
@@ -19,6 +20,13 @@ export interface PeerSetupOptions {
 }
 
 type Profile = keyof typeof peerProfiles;
+
+export async function setupDiscussionConfig(
+  options: PeerSetupOptions
+): Promise<{ configPath: string; envPath: string; wroteKeys: boolean }> {
+  return setupConfig(options, true);
+}
+
 interface SetupMember {
   profile: Profile;
   baseUrl: string;
@@ -92,7 +100,8 @@ async function collectMember(
   slot: "member-a" | "member-b",
   prompt: PeerPrompt,
   options: PeerSetupOptions,
-  keys: Record<string, string>
+  keys: Record<string, string>,
+  discussionMode: boolean
 ): Promise<SetupMember> {
   options.io.log(`Configure ${slot}.`);
   const selected = await withDefault(
@@ -125,7 +134,9 @@ async function collectMember(
   }
   const member: SetupMember = { profile: name, baseUrl, modelId, apiKeyEnv, outputMode };
   // Validate fields before requesting a secret; validate the complete pair again before writing.
-  normalizePeerMembers({ members: { "member-a": member, "member-b": member } }, options.env);
+  const pair = { "member-a": member, "member-b": member };
+  if (discussionMode) parseDiscussionConfig({ configVersion: 2, members: pair }, options.env);
+  else normalizePeerMembers({ members: pair }, options.env);
   const key = await prompt.secret(`Optional API key for ${apiKeyEnv} (hidden; Enter to skip): `);
   if (key.trim()) {
     if (Object.hasOwn(keys, apiKeyEnv) && keys[apiKeyEnv] !== key)
@@ -142,9 +153,44 @@ async function collectMember(
 export async function setupPeerConfig(
   options: PeerSetupOptions
 ): Promise<{ configPath: string; envPath: string; wroteKeys: boolean }> {
+  return setupConfig(options, false);
+}
+
+async function collectDiscussion(
+  prompt: PeerPrompt,
+  members: Record<"member-a" | "member-b", SetupMember>,
+  env: Record<string, string | undefined>
+): Promise<DiscussionConfigPolicy> {
+  const effort = await withDefault(prompt, "Discussion effort (low, standard, high)", "standard");
+  const weights = {
+    "member-a": {
+      participationWeight: Number(await withDefault(prompt, "member-a participation weight (0.1–100)", "1")),
+      decisionWeight: Number(await withDefault(prompt, "member-a decision weight (0.1–100)", "1"))
+    },
+    "member-b": {
+      participationWeight: Number(await withDefault(prompt, "member-b participation weight (0.1–100)", "1")),
+      decisionWeight: Number(await withDefault(prompt, "member-b decision weight (0.1–100)", "1"))
+    }
+  };
+  const rounds = await withDefault(prompt, "Maximum discussion rounds (Enter for effort defaults)");
+  return parseDiscussionConfig(
+    {
+      configVersion: 2,
+      members,
+      discussion: { effort, weights, ...(rounds ? { maxRounds: Number(rounds) } : {}) }
+    },
+    env
+  ).discussion;
+}
+
+async function setupConfig(
+  options: PeerSetupOptions,
+  discussionMode: boolean
+): Promise<{ configPath: string; envPath: string; wroteKeys: boolean }> {
   const keys = Object.create(null) as Record<string, string>;
   let prompt: PeerPrompt | undefined;
   let members: Record<"member-a" | "member-b", SetupMember>;
+  let discussion: DiscussionConfigPolicy | undefined;
   try {
     if (options.noInput) {
       const template = (apiKeyEnv: string): SetupMember => ({
@@ -159,15 +205,23 @@ export async function setupPeerConfig(
       prompt = options.prompt ?? terminalPrompt();
       options.io.log("CoThink setup. Keys are optional and saved separately. No API requests are sent.");
       members = {
-        "member-a": await collectMember("member-a", prompt, options, keys),
-        "member-b": await collectMember("member-b", prompt, options, keys)
+        "member-a": await collectMember("member-a", prompt, options, keys, discussionMode),
+        "member-b": await collectMember("member-b", prompt, options, keys, discussionMode)
       };
+      if (discussionMode) discussion = await collectDiscussion(prompt, members, options.env);
     }
     // Finish terminal input before committing the validated files.
     prompt?.close?.();
     prompt = undefined;
-    const config = { members };
-    normalizePeerMembers(config, options.env);
+    const config = discussionMode
+      ? {
+          configVersion: 2,
+          members,
+          discussion: discussion ?? parseDiscussionConfig({ configVersion: 2, members }, options.env).discussion
+        }
+      : { members };
+    if (discussionMode) parseDiscussionConfig(config, options.env);
+    else normalizePeerMembers(config, options.env);
     await writeSetupFiles(options.configPath, options.envPath, config, keys);
     const wroteKeys = Object.keys(keys).length > 0;
     options.io.log(`Configuration saved: ${options.configPath}`);

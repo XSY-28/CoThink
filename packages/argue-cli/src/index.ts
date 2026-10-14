@@ -25,6 +25,7 @@ import { createTaskDelegate } from "./runtime/delegate.js";
 import { createSpinner } from "./spinner.js";
 import { MAX_ENCODED_BYTES, openReportInViewer, resolveLatestRequestId } from "./view.js";
 import { VENDOR_PRESETS, getVendorNames } from "./vendors.js";
+export { FileDiscussionStore } from "./discussion/file-store.js";
 export type { CliSdkProviderAdapter, CreateCliSdkProviderAdapter, ProviderTaskRunnerArgs } from "./runtime/types.js";
 
 export type CliRunOptions = {

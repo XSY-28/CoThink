@@ -187,6 +187,12 @@ function printState(state: PeerSession, io: Io) {
 function defaultRoot(options: Options): string {
   return resolve(get(options, "root") ?? ".argue-peer");
 }
+/** Share the legacy argument grammar with the CoThink format gate. */
+export function peerSessionTarget(args: string[]): { root: string; sessionId: string } | undefined {
+  const [command = "", ...rest] = args;
+  const options = parse(command, rest);
+  return command === "start" ? undefined : { root: defaultRoot(options), sessionId: options.positionals[0]! };
+}
 function openLocal(path: string) {
   const command = process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open";
   const args = process.platform === "win32" ? ["/c", "start", "", path] : [path];

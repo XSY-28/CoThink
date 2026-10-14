@@ -3,8 +3,9 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { normalizePeerMembers } from "../../src/peer/config.js";
+import { loadDiscussionConfig } from "../../src/discussion/config.js";
 import { readPeerEnvironment } from "../../src/peer/local-config.js";
-import { setupPeerConfig, type PeerPrompt } from "../../src/peer/setup.js";
+import { setupDiscussionConfig, setupPeerConfig, type PeerPrompt } from "../../src/peer/setup.js";
 
 let root: string;
 beforeEach(async () => {
@@ -63,6 +64,85 @@ const genericAnswers = [
   "CUSTOM_B"
 ];
 const presetAnswers = ["deepseek", "", "", "", "glm", "", "", ""];
+
+it("creates a v2 discussion template with independent default weights without prompting", async () => {
+  const opts = options(scriptedPrompt([], []).prompt);
+  await setupDiscussionConfig({ ...opts, noInput: true });
+  expect(JSON.parse(await readFile(opts.configPath, "utf8")).configVersion).toBe(2);
+  const config = await loadDiscussionConfig(opts.configPath);
+  expect(config.configVersion).toBe(2);
+  expect(config.discussion).toEqual({
+    effort: "standard",
+    weights: {
+      "member-a": { participationWeight: 1, decisionWeight: 1 },
+      "member-b": { participationWeight: 1, decisionWeight: 1 }
+    }
+  });
+  expect((await stat(opts.configPath)).mode & 0o777).toBe(0o600);
+  expect((await stat(join(root, "private"))).mode & 0o777).toBe(0o700);
+  await expect(stat(opts.envPath)).rejects.toThrow();
+});
+
+it("accepts skipped discussion options and keeps entered keys private", async () => {
+  const fake = scriptedPrompt(
+    [...presetAnswers, "", "", "", "", "", ""],
+    ["fake-v2-sensitive-a", "fake-v2-sensitive-b"]
+  );
+  const opts = options(fake.prompt);
+  await setupDiscussionConfig(opts);
+  expect(JSON.parse(await readFile(opts.configPath, "utf8")).configVersion).toBe(2);
+  const config = await loadDiscussionConfig(opts.configPath);
+  expect(config.discussion.effort).toBe("standard");
+  expect(config.discussion.weights["member-a"]).toEqual({ participationWeight: 1, decisionWeight: 1 });
+  expect(config.discussion.weights["member-b"]).toEqual({ participationWeight: 1, decisionWeight: 1 });
+  expect(config.discussion.maxRounds).toBeUndefined();
+  expect((await readFile(opts.configPath, "utf8")) + opts.logs.join(" ")).not.toContain("fake-v2-sensitive");
+  expect(await readPeerEnvironment(opts.envPath, {})).toEqual({
+    DEEPSEEK_API_KEY: "fake-v2-sensitive-a",
+    GLM_API_KEY: "fake-v2-sensitive-b"
+  });
+  expect((await stat(opts.envPath)).mode & 0o777).toBe(0o600);
+  expect(fake.isClosed()).toBe(true);
+});
+
+it("collects effort, each participation and decision weight independently, and an optional round cap", async () => {
+  const fake = scriptedPrompt([...presetAnswers, "high", "2", "1", "1", "3", "5"], ["", ""]);
+  const opts = options(fake.prompt);
+  await setupDiscussionConfig(opts);
+  expect((await loadDiscussionConfig(opts.configPath)).discussion).toEqual({
+    effort: "high",
+    weights: {
+      "member-a": { participationWeight: 2, decisionWeight: 1 },
+      "member-b": { participationWeight: 1, decisionWeight: 3 }
+    },
+    maxRounds: 5
+  });
+});
+
+it.each([
+  ["INTERNAL_DISCUSSION_SENTINEL", "1", "1", "1", "1", ""],
+  ["standard", "0", "1", "1", "1", ""],
+  ["standard", "1", "101", "1", "1", ""],
+  ["standard", "1", "1", "1", "1", "0"]
+])("refuses invalid discussion defaults without persisting keys or echoing input: %#", async (...policyAnswers) => {
+  const fake = scriptedPrompt([...presetAnswers, ...policyAnswers], ["fake-v2-sensitive-a", ""]);
+  const opts = options(fake.prompt);
+  await expect(setupDiscussionConfig(opts)).rejects.not.toThrow(/SENTINEL|fake-v2-sensitive/);
+  await expect(stat(opts.configPath)).rejects.toThrow();
+  await expect(stat(opts.envPath)).rejects.toThrow();
+  expect(fake.isClosed()).toBe(true);
+});
+
+it("keeps existing v2 config and key files intact when setup is repeated", async () => {
+  const opts = options(scriptedPrompt([...presetAnswers, "", "", "", "", "", ""], ["first-private", ""]).prompt);
+  await setupDiscussionConfig(opts);
+  const beforeConfig = await readFile(opts.configPath, "utf8");
+  const beforeKeys = await readFile(opts.envPath, "utf8");
+  opts.prompt = scriptedPrompt([...presetAnswers, "", "", "", "", "", ""], ["second-private", ""]).prompt;
+  await expect(setupDiscussionConfig(opts)).rejects.toThrow(/exist/i);
+  expect(await readFile(opts.configPath, "utf8")).toBe(beforeConfig);
+  expect(await readFile(opts.envPath, "utf8")).toBe(beforeKeys);
+});
 
 it("writes two independent generic transports and keeps optional keys out of configuration and logs", async () => {
   const fake = scriptedPrompt([...genericAnswers], ["fake-sensitive-a", "fake-sensitive-b"]);
