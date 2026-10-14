@@ -328,6 +328,8 @@ export type SealedDiscussionReply = DiscussionReadonly<z.infer<typeof SealedDisc
 export type ReviewEpoch = DiscussionReadonly<z.infer<typeof ReviewEpochSchema>>;
 export type DiscussionSession = DiscussionReadonly<z.infer<typeof DiscussionSessionSchema>>;
 export interface DiscussionSessionInput {
+  readonly segmentId?: number;
+  readonly contextVersion?: number;
   readonly sessionId: string;
   readonly question: string;
   readonly constraints?: readonly string[];

@@ -10,7 +10,10 @@ import {
   reserveReviewRetry,
   reserveAttemptBatch,
   settleBudgetAttempt,
-  remainingBudget
+  remainingBudget,
+  reserveRetryAttempts,
+  extendDiscussionBudget,
+  BudgetCapacityError
 } from "../../src/discussion/budget.js";
 
 const ids = ["a", "b"];
@@ -359,4 +362,174 @@ it("records review consumption from the charged snapshot without reading input g
   expect(reads).toBe(1);
   expect(charged.reservations[0]!.attemptIds.a).toBe(charged.attempts.find((a) => a.memberId === "a")!.attemptId);
   expect(remainingBudget(charged, 0).reservedCalls).toBe(0);
+});
+
+it.each(["failed", "cancelled", "unknown"] as const)("retries only the missing %s member without refund", (outcome) => {
+  let state = reserveAttemptBatch(ready(), { phase: "opening", attemptIds: { a: "a", b: "b" } }, 0);
+  state = settleBudgetAttempt(state, "a", "succeeded", 1);
+  state = settleBudgetAttempt(state, "b", outcome, 1);
+  const before = remainingBudget(state, 1);
+  const retried = reserveRetryAttempts(state, { b: "b2" }, { b: "b" }, 2);
+  expect(retried.attempts).toHaveLength(3);
+  expect(retried.attempts.slice(0, 2)).toEqual(state.attempts);
+  expect(retried.attempts[2]).toMatchObject({ memberId: "b", maxOutputTokens: 2048, phase: "opening" });
+  expect(remainingBudget(retried, 2)).toMatchObject({
+    remainingCalls: before.remainingCalls - 1,
+    remainingAllocatedOutputTokens: before.remainingAllocatedOutputTokens - 2048,
+    reservedCalls: 2,
+    reservedOutputTokens: 8192
+  });
+});
+it("retries discussion at its original weighted cap and round without redistribution", () => {
+  const configured = normalizeDiscussionPolicy(
+    { weights: { a: { participationWeight: 2 }, b: { participationWeight: 1 } } },
+    ids
+  );
+  let state = freezeBudgetRoundLimit(reserveReviewBudget(createBudgetLedger(configured, 0), "r", counts, 0), {
+    a: "complex",
+    b: "complex"
+  });
+  state = reserveAttemptBatch(state, { phase: "discussion", roundIndex: 0, attemptIds: { a: "a", b: "b" } }, 0);
+  state = settleBudgetAttempt(state, "a", "failed", 1);
+  state = settleBudgetAttempt(state, "b", "succeeded", 1);
+  const retried = reserveRetryAttempts(state, { a: "a2" }, { a: "a" }, 2);
+  expect(retried.attempts[2]).toMatchObject({ phase: "discussion", roundIndex: 0, maxOutputTokens: 4779 });
+  expect(retried.policy).toBe(state.policy);
+  expect(state.attempts).toHaveLength(2);
+});
+it("charges review retries against the same checkpoint and preserves successful reviewers", () => {
+  let state = reserveAttemptBatch(
+    ready(),
+    { phase: "review", reservationId: "review-1", attemptIds: { a: "a", b: "b" } },
+    0
+  );
+  state = settleBudgetAttempt(state, "a", "succeeded", 1);
+  state = settleBudgetAttempt(state, "b", "unknown", 1);
+  state = reserveRetryAttempts(state, { b: "b2" }, { b: "b" }, 2);
+  expect(state.attempts[2]).toMatchObject({ maxOutputTokens: 4096, reservationId: "b2:reservation" });
+  expect(state.reservations[1]).toMatchObject({ checkpointId: "review-1", allocation: { b: 4096 } });
+  state = settleBudgetAttempt(state, "b2", "failed", 3);
+  const next = reserveRetryAttempts(state, { b: "b3" }, { b: "b2" }, 4);
+  expect(next.attempts).toHaveLength(4);
+  expect(remainingBudget(next, 4).remainingCalls).toBe(14);
+  expect(remainingBudget(next, 4).remainingAllocatedOutputTokens).toBe(policy().maxAllocatedOutputTokens - 16384);
+  expect(() => reserveRetryAttempts(next, { b: "b4" }, { b: "b" }, 4)).toThrow(/latest/i);
+});
+it("rejects retry of pending, successful, wrong-member, unknown, duplicate or empty attempts", () => {
+  let state = reserveAttemptBatch(ready(), { phase: "opening", attemptIds: { a: "a", b: "b" } }, 0);
+  expect(() => reserveRetryAttempts(state, { a: "a2" }, { a: "a" }, 0)).toThrow(/latest/i);
+  state = settleBudgetAttempt(state, "a", "succeeded", 1);
+  state = settleBudgetAttempt(state, "b", "failed", 1);
+  const invalidReferences: Array<readonly [Record<string, string>, Record<string, string>]> = [
+    [{ a: "a2" }, { a: "a" }],
+    [{ b: "b2" }, { b: "a" }],
+    [{ b: "b2" }, { b: "missing" }],
+    [{ b: "a" }, { b: "b" }],
+    [{}, {}],
+    [{ x: "x2" }, { x: "x" }],
+    [{ b: "b2" }, { a: "a", b: "b" }]
+  ];
+  for (const [next, prior] of invalidReferences) expect(() => reserveRetryAttempts(state, next, prior, 1)).toThrow();
+  expect(() => reserveRetryAttempts(state, { b: "b2", [Symbol("x")]: "x" }, { b: "b" }, 1)).toThrow();
+  expect(state.attempts).toHaveLength(2);
+});
+it("rejects retry subsets from different phase-round batches atomically", () => {
+  let state = reserveAttemptBatch(ready(), { phase: "discussion", roundIndex: 0, attemptIds: { a: "a0", b: "b0" } }, 0);
+  state = settleBudgetAttempt(state, "a0", "failed", 1);
+  state = reserveAttemptBatch(state, { phase: "discussion", roundIndex: 1, attemptIds: { a: "a1", b: "b1" } }, 1);
+  state = settleBudgetAttempt(state, "b1", "failed", 2);
+  expect(() => reserveRetryAttempts(state, { a: "a2", b: "b2" }, { a: "a0", b: "b1" }, 2)).toThrow(/same phase/i);
+  expect(state.attempts).toHaveLength(4);
+});
+it("distinguishes exhausted hard caps from illegal operations and permits only explicit extension", () => {
+  let state = reserveReviewBudget(
+    createBudgetLedger(normalizeDiscussionPolicy({ maxCalls: 4, maxAllocatedOutputTokens: 12288 }, ids), 0),
+    "r",
+    counts,
+    0
+  );
+  state = reserveAttemptBatch(state, { phase: "opening", attemptIds: { a: "a", b: "b" } }, 0);
+  state = settleBudgetAttempt(state, "b", "unknown", 1);
+  expect(() => reserveRetryAttempts(state, { b: "b2" }, { b: "b" }, 1)).toThrow(BudgetCapacityError);
+  expect(() => reserveRetryAttempts(state, { x: "x2" }, { x: "x" }, 1)).not.toThrow(BudgetCapacityError);
+  const expanded = extendDiscussionBudget(
+    state,
+    { extensionId: "extra", extraCalls: 1, extraAllocatedOutputTokens: 2048 },
+    1
+  );
+  const retried = reserveRetryAttempts(expanded, { b: "b2" }, { b: "b" }, 1);
+  expect(remainingBudget(retried, 1)).toMatchObject({ remainingCalls: 2, remainingAllocatedOutputTokens: 8192 });
+  const reviewed = reserveAttemptBatch(
+    retried,
+    { phase: "review", reservationId: "r", attemptIds: { a: "ra", b: "rb" } },
+    1
+  );
+  expect(remainingBudget(reviewed, 1)).toMatchObject({ remainingCalls: 0, remainingAllocatedOutputTokens: 0 });
+  expect(state.extensions).toBeUndefined();
+});
+it("appends frozen extension history while preserving original caps and enforcing a monotonic clock", () => {
+  const original = ledger();
+  const first = extendDiscussionBudget(original, { extensionId: "one", extraCalls: 1, extendMs: 10 }, 4);
+  const next = extendDiscussionBudget(first, { extensionId: "two", extraAllocatedOutputTokens: 500, extendMs: 20 }, 5);
+  expect(next.policy).toBe(original.policy);
+  expect(next.deadlineAtMs).toBe(original.deadlineAtMs + 30);
+  expect(next.extensions).toEqual([
+    { extensionId: "one", atMs: 4, extraCalls: 1, extraAllocatedOutputTokens: 0, extendMs: 10 },
+    { extensionId: "two", atMs: 5, extraCalls: 0, extraAllocatedOutputTokens: 500, extendMs: 20 }
+  ]);
+  expect(Object.isFrozen(next.extensions)).toBe(true);
+  expect(Object.isFrozen(next.extensions![0])).toBe(true);
+  expect(() => extendDiscussionBudget(next, { extensionId: "one", extraCalls: 1 }, 5)).toThrow(/unique/i);
+  expect(() => extendDiscussionBudget(next, { extensionId: "three", extraCalls: 1 }, 4)).toThrow(/backwards/i);
+  for (const value of [-1, 0.1, NaN, Infinity, Number.MAX_SAFE_INTEGER])
+    expect(() => extendDiscussionBudget(next, { extensionId: "bad", extraCalls: value }, 5)).toThrow();
+  expect(() => extendDiscussionBudget(next, { extensionId: "empty" }, 5)).toThrow(/positive/i);
+});
+it("cannot spend the full review time window on a retry without explicit deadline extension", () => {
+  let state = reserveAttemptBatch(ready(), { phase: "opening", attemptIds: { a: "a", b: "b" } }, 0);
+  state = settleBudgetAttempt(state, "b", "cancelled", 1);
+  const now = state.deadlineAtMs - state.policy.callTimeoutMs;
+  expect(() => reserveRetryAttempts(state, { b: "b2" }, { b: "b" }, now)).toThrow(BudgetCapacityError);
+  state = extendDiscussionBudget(state, { extensionId: "time", extendMs: 100 }, now);
+  const retried = reserveRetryAttempts(state, { b: "b2" }, { b: "b" }, now);
+  expect(retried.attempts[2]!.timeoutMs).toBe(100);
+  expect(retried.attempts[2]!.deadlineAtMs).toBe(now + 100);
+});
+it("captures retry IDs once even for non-enumerable getters", () => {
+  let state = reserveAttemptBatch(ready(), { phase: "opening", attemptIds: { a: "a", b: "b" } }, 0);
+  state = settleBudgetAttempt(state, "b", "failed", 1);
+  let reads = 0;
+  const next = {} as Record<string, string>;
+  Object.defineProperty(next, "b", { get: () => `b${++reads}` });
+  const retried = reserveRetryAttempts(state, next, { b: "b" }, 1);
+  expect(reads).toBe(1);
+  expect(retried.attempts[2]!.attemptId).toBe("b1");
+});
+it("retries a review subset across different prior retry reservations in the same checkpoint", () => {
+  let state = reserveAttemptBatch(
+    ready(),
+    { phase: "review", reservationId: "review-1", attemptIds: { a: "a", b: "b" } },
+    0
+  );
+  state = settleBudgetAttempt(state, "a", "failed", 1);
+  state = settleBudgetAttempt(state, "b", "unknown", 1);
+  state = reserveRetryAttempts(state, { a: "a2" }, { a: "a" }, 2);
+  state = settleBudgetAttempt(state, "a2", "cancelled", 3);
+  const retried = reserveRetryAttempts(state, { a: "a3", b: "b2" }, { a: "a2", b: "b" }, 4);
+  expect(retried.attempts.slice(-2).map((attempt) => attempt.memberId)).toEqual(ids);
+  expect(retried.reservations.slice(-2).every((reservation) => reservation.checkpointId === "review-1")).toBe(true);
+});
+it("does not persist any partial retry reservation when a multi-member retry exhausts capacity", () => {
+  let state = reserveReviewBudget(
+    createBudgetLedger(normalizeDiscussionPolicy({ maxCalls: 3 }, ids), 0),
+    "r",
+    counts,
+    0
+  );
+  state = reserveAttemptBatch(state, { phase: "review", reservationId: "r", attemptIds: { a: "a", b: "b" } }, 0);
+  state = settleBudgetAttempt(state, "a", "failed", 1);
+  state = settleBudgetAttempt(state, "b", "unknown", 1);
+  const snapshot = JSON.stringify(state);
+  expect(() => reserveRetryAttempts(state, { a: "a2", b: "b2" }, { a: "a", b: "b" }, 2)).toThrow(BudgetCapacityError);
+  expect(JSON.stringify(state)).toBe(snapshot);
 });

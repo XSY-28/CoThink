@@ -26,8 +26,16 @@ try {
     maxBuffer: 16 * 1024 * 1024
   });
   const executable = join(sandbox, "node_modules/cothink/dist/cli.js");
-  const run = async (args) =>
-    (await exec(process.execPath, [executable, ...args], { cwd: sandbox, maxBuffer: 16 * 1024 * 1024 })).stdout;
+  const sentinel = "INTERNAL_DISCUSSION_SENTINEL";
+  const run = async (args) => {
+    const result =
+      process.platform === "win32"
+        ? await exec(process.execPath, ["--", executable, ...args], { cwd: sandbox, maxBuffer: 16 * 1024 * 1024 })
+        : await exec(join(sandbox, "node_modules/.bin/cothink"), args, { cwd: sandbox, maxBuffer: 16 * 1024 * 1024 });
+    if ([result.stdout, result.stderr].some((text) => text.includes(sentinel) || text.includes("pack-fake-")))
+      throw Error("Installed command leaked private content");
+    return result.stdout;
+  };
   if (!(await run(["--version"])).includes("CoThink v")) throw Error("Version entry failed");
   if (!(await run(["--help"])).includes("cothink setup")) throw Error("Help entry failed");
   const pkg = JSON.parse(await readFile(join(sandbox, "node_modules/cothink/package.json"), "utf8"));
@@ -44,29 +52,50 @@ try {
     const chunks = [];
     for await (const part of req) chunks.push(Buffer.from(part));
     const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-    const context = JSON.parse(body.messages.at(-1).content),
-      template = context.responseContract.template;
+    const context = JSON.parse(body.messages.at(-1).content);
     calls++;
     if (req.headers.authorization !== `Bearer pack-fake-${body.model}`) {
       res.writeHead(401);
       res.end();
       return;
     }
-    const payload = {
-      ...template,
-      conclusion: "Synthetic connection/discussion result",
-      ...(context.phase === "opening"
-        ? { claims: [{ statement: "Synthetic claim", rationale: "Synthetic reason", assumptions: [], sourceRefs: [] }] }
-        : context.phase === "discussion"
-          ? { actions: [], readyToReview: true }
+    let payload;
+    if (context.responseContract.byMember) {
+      const member = body.model === "a" ? "member-a" : "member-b",
+        contract = context.responseContract.byMember[member];
+      payload = JSON.parse(JSON.stringify(contract.template));
+      if (payload.phase === "opening") {
+        payload.claims = [{ statement: sentinel, rationale: sentinel, assumptions: [], sourceRefs: [] }];
+        payload.answer.body = "Independent initial position";
+        payload.complexity = "simple";
+        payload.complexityRationale = sentinel;
+      } else if (payload.phase === "discussion") {
+        payload.answer.body = "FINAL_PUBLIC_RESULT";
+        payload.answer.basisVersionIds = contract.referenceSlots.activeBasisVersionIds;
+        payload.readyToReview = true;
+      } else
+        for (const position of payload.positions) {
+          position.stance = "accept";
+          position.rationale = sentinel;
+        }
+      payload.evidenceRequests = [sentinel];
+    } else {
+      // Keep the explicitly invoked legacy connection diagnostic bounded to four requests.
+      const template = context.responseContract.template;
+      payload = {
+        ...template,
+        conclusion: "Synthetic connection check",
+        ...(context.phase === "opening"
+          ? { claims: [{ statement: sentinel, rationale: sentinel, assumptions: [], sourceRefs: [] }] }
           : {
-              positions: template.positions.map((p) => ({
-                ...p,
+              positions: template.positions.map((position) => ({
+                ...position,
                 stance: "uncertain",
-                rationale: "Synthetic assessment"
+                rationale: sentinel
               }))
             })
-    };
+      };
+    }
     res.writeHead(200, { "content-type": "application/json" });
     res.end(
       JSON.stringify({
@@ -75,7 +104,11 @@ try {
         created: 1,
         model: body.model,
         choices: [
-          { index: 0, message: { role: "assistant", content: JSON.stringify(payload) }, finish_reason: "stop" }
+          {
+            index: 0,
+            message: { role: "assistant", content: JSON.stringify(payload), reasoning_content: sentinel },
+            finish_reason: "stop"
+          }
         ],
         usage: { prompt_tokens: 3, completion_tokens: 4 }
       })
@@ -88,6 +121,8 @@ try {
   await writeFile(
     join(sandbox, "config.json"),
     JSON.stringify({
+      configVersion: 2,
+      discussion: { effort: "standard" },
       members: {
         "member-a": { protocol: "openai-compatible", baseUrl, modelId: "a", apiKeyEnv: "PACK_A" },
         "member-b": { protocol: "openai-compatible", baseUrl, modelId: "b", apiKeyEnv: "PACK_B" }
@@ -97,37 +132,93 @@ try {
   await writeFile(join(sandbox, "keys.env"), "PACK_A=pack-fake-a\nPACK_B=pack-fake-b\n", { mode: 0o600 });
   const diagnostics = JSON.parse(await run(["test", "--config", "config.json", "--env-file", "keys.env", "--json"]));
   if (!diagnostics.ok || diagnostics.calls !== 4 || calls !== 4) throw Error("Installed diagnostic flow failed");
-  await run([
-    "start",
-    "--question",
-    "Synthetic install test",
-    "--config",
-    "config.json",
-    "--env-file",
-    "keys.env",
-    "--session-id",
-    "pack-smoke",
-    "--rounds",
-    "2",
-    "--max-calls",
-    "8"
-  ]);
-  if (calls !== 12) throw Error("Installed paired flow made unexpected calls");
-  await run(["show", "pack-smoke"]);
-  await run(["export", "pack-smoke", "--format", "json", "--output", "report.json"]);
-  await run(["view", "pack-smoke", "--no-open"]);
-  const text = await readFile(join(sandbox, "report.json"), "utf8"),
-    report = JSON.parse(text);
+  await writeFile(join(sandbox, "question.txt"), "Synthetic install test");
+  const result = JSON.parse(
+    await run([
+      "start",
+      "--question-file",
+      "question.txt",
+      "--config",
+      "config.json",
+      "--env-file",
+      "keys.env",
+      "--session-id",
+      "pack-smoke",
+      "--effort",
+      "low",
+      "--max-rounds",
+      "1",
+      "--participation-weight",
+      "member-a=2",
+      "--decision-weight",
+      "member-b=3",
+      "--json"
+    ])
+  );
+  if (calls !== 10 || result.outcome !== "consensus" || result.answer !== "FINAL_PUBLIC_RESULT")
+    throw Error("Installed discussion final flow failed");
+  const snapshot = JSON.parse(await readFile(join(sandbox, ".cothink/sessions/pack-smoke/session.json"), "utf8"));
   if (
-    report.status !== "completed" ||
-    report.reviewStatus !== "complete" ||
-    report.reviews.length !== 2 ||
-    text.includes("pack-fake-")
+    snapshot.schemaVersion !== 2 ||
+    snapshot.segments[0].protocol.policy.effort !== "low" ||
+    snapshot.segments[0].protocol.policy.weights["member-a"].participationWeight !== 2
   )
-    throw Error("Installed export verification failed");
-  if (calls !== 12) throw Error("Read-only commands made model calls");
+    throw Error("Installed policy freezing failed");
+  if (!JSON.stringify(snapshot).includes(sentinel)) throw Error("Internal sentinel fixture was not exercised");
+  if (JSON.stringify(snapshot).includes("pack-fake-")) throw Error("Installed snapshot leaked credentials");
+  const show = JSON.parse(await run(["show", "pack-smoke", "--json", "--env-file", "missing-keys.env"]));
+  if (JSON.stringify(show) !== JSON.stringify(result)) throw Error("Installed read did not return saved final result");
+  for (const format of ["txt", "md", "json", "html"]) {
+    const exported = JSON.parse(
+      await run([
+        "export",
+        "pack-smoke",
+        "--format",
+        format,
+        "--output",
+        `result.${format}`,
+        "--json",
+        "--env-file",
+        "missing-keys.env"
+      ])
+    );
+    if (JSON.stringify(exported) !== JSON.stringify(result)) throw Error("Installed export stdout was not FinalResult");
+    const content = await readFile(join(sandbox, `result.${format}`), "utf8");
+    if (content.includes(sentinel) || content.includes("pack-fake-") || !content.includes(result.answer))
+      throw Error("Installed export leaked discussion or lost answer");
+  }
+  await run(["view", "pack-smoke", "--no-open", "--env-file", "missing-keys.env"]);
+  const html = await readFile(join(sandbox, ".cothink/sessions/pack-smoke/final.html"), "utf8");
+  if (html.includes(sentinel) || html.includes("pack-fake-") || /<script\b/i.test(html))
+    throw Error("Installed HTML carried private discussion");
+  if (calls !== 10) throw Error("Read-only commands made model calls");
+  const next = JSON.parse(
+    await run([
+      "continue",
+      "pack-smoke",
+      "--note",
+      "New installed material",
+      "--effort",
+      "high",
+      "--max-rounds",
+      "1",
+      "--decision-weight",
+      "member-a=4",
+      "--env-file",
+      "keys.env",
+      "--json"
+    ])
+  );
+  if (calls !== 16 || next.segmentId !== 2 || next.outcome !== "consensus")
+    throw Error("Installed continuation failed");
+  const continued = JSON.parse(await readFile(join(sandbox, ".cothink/sessions/pack-smoke/session.json"), "utf8"));
+  if (
+    JSON.stringify(continued.segments[0]) !== JSON.stringify(snapshot.segments[0]) ||
+    continued.segments[1].protocol.policy.effort !== "high"
+  )
+    throw Error("Installed continuation rewrote old segment or policy");
   console.log(
-    "CoThink fresh tarball install: help/version/init, 4-call diagnostics, 8-call paired discussion, show/export/offline view passed; no upstream library dependency or exported keys."
+    "CoThink fresh tarball install: config v2, legacy bounded diagnostics (4 calls), discussion consensus (6), new segment (6), FinalResult-only reads and all four exports; no upstream library, keys or internal sentinel leaked."
   );
 } finally {
   server?.closeAllConnections();

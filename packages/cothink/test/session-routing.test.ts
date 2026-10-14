@@ -38,13 +38,13 @@ const header = {
 it("routes af34aac sessions through legacy read commands, also with options before the ID", async () => {
   const id = paused.config.sessionId,
     bytes = await snapshot(id, paused);
-  expect(await runCoThink(["show", "--root", root, id], io, { env: {} })).toEqual({ ok: true, code: 0 });
+  expect(await runCoThink(["show", "--root", root, id], io, { env: {} })).toEqual({ ok: false, code: 2 });
   expect(await readFile(join(root, id, "session.json"), "utf8")).toBe(bytes);
   expect(calls).not.toHaveBeenCalled();
   expect(errors).toEqual([]);
 });
 it.each(["show", "retry", "continue", "export", "view"])(
-  "routes recognized v2 %s to an explicit unavailable handler with no calls or writes",
+  "routes recognized v2 %s to strict runtime validation with no calls or writes",
   async (command) => {
     const bytes = await snapshot("new", header);
     const extra =
@@ -59,7 +59,7 @@ it.each(["show", "retry", "continue", "export", "view"])(
       ok: false,
       code: 1
     });
-    expect(errors.join("\n")).toContain("not implemented in stage 0");
+    expect(errors.join("\n")).toMatch(/runtime snapshot|version/i);
     expect(calls).not.toHaveBeenCalled();
     expect(await readFile(join(root, "new", "session.json"), "utf8")).toBe(bytes);
     expect(await readdir(join(root, "new"))).toEqual(["session.json"]);

@@ -5,7 +5,7 @@ import {
   DiscussionProtocolTurnSchema,
   type DiscussionSemanticSnapshot
 } from "./contracts.js";
-import type { ProtocolCodec } from "./codec.js";
+import type { DiscussionMemberRequest, ProtocolCodec } from "./codec.js";
 
 const text: ModelJsonValue = { type: "string", minLength: 1, pattern: "\\S" };
 const object = (
@@ -263,6 +263,50 @@ function responseContract(snapshot: DiscussionSemanticSnapshot): Record<string, 
   };
 }
 
+function systemText(
+  snapshot: DiscussionSemanticSnapshot,
+  context: { memberId: string; maxOutputTokens: number },
+  schema: Record<string, ModelJsonValue>
+): string {
+  return `${COMMON}\n${PHASE[snapshot.phase]}\nYour identity: ${context.memberId}. Output quota: ${context.maxOutputTokens} tokens. Codec: ${DISCUSSION_CODEC_VERSION}. Output JSON schema: ${canonicalJson(schema)}`;
+}
+
+/** Inspect the saved JSON-v1 expression, never encode/regenerate a frozen request.
+ * Hash integrity alone cannot establish that a request expresses the bound snapshot.
+ * Shared schema/template helpers define JSON-v1 representation; domain validation
+ * of decoded responses remains independent and runs after this input validation. */
+export function validateFrozenJsonDiscussionRequest(
+  snapshot: DiscussionSemanticSnapshot,
+  context: { memberId: string; maxOutputTokens: number },
+  request: DiscussionMemberRequest
+): void {
+  const fail = (condition: boolean, detail: string): void => {
+    if (!condition) throw new Error(`Frozen JSON ${detail} mismatch`);
+  };
+  fail(request.codecVersion === DISCUSSION_CODEC_VERSION, "codec");
+  fail(request.memberId === context.memberId && request.maxOutputTokens === context.maxOutputTokens, "identity/quota");
+  fail(snapshot.memberIds.includes(context.memberId), "member");
+  fail(
+    request.messages.length === 2 && request.messages[0]?.role === "system" && request.messages[1]?.role === "user",
+    "messages"
+  );
+  let actual: unknown;
+  try {
+    actual = JSON.parse(request.messages[1]!.content);
+  } catch {
+    throw new Error("Frozen JSON user snapshot is not valid JSON");
+  }
+  fail(actual !== null && typeof actual === "object" && !Array.isArray(actual), "user snapshot");
+  const { responseContract: actualContract, ...actualSnapshot } = actual as Record<string, unknown>;
+  // Canonical JSON-v1 also rejects duplicate keys and hidden alternate expressions.
+  fail(request.messages[1]!.content === canonicalJson(actual), "canonical user snapshot");
+  fail(canonicalJson(actualSnapshot) === canonicalJson(snapshot), "shared semantic snapshot");
+  fail(canonicalJson(actualContract) === canonicalJson(responseContract(snapshot)), "reference slots/template");
+  const schema = turnSchema(snapshot, context.memberId);
+  fail(canonicalJson(request.outputSchema) === canonicalJson(schema), "output schema");
+  fail(request.messages[0]!.content === systemText(snapshot, context, schema), "system instruction");
+}
+
 export class JsonDiscussionCodec implements ProtocolCodec {
   readonly codecVersion = DISCUSSION_CODEC_VERSION;
   encode(snapshot: DiscussionSemanticSnapshot, context: { memberId: string; maxOutputTokens: number }) {
@@ -273,10 +317,7 @@ export class JsonDiscussionCodec implements ProtocolCodec {
     return {
       outputSchema,
       messages: [
-        {
-          role: "system" as const,
-          content: `${COMMON}\n${PHASE[snapshot.phase]}\nYour identity: ${context.memberId}. Output quota: ${context.maxOutputTokens} tokens. Codec: ${this.codecVersion}. Output JSON schema: ${canonicalJson(outputSchema)}`
-        },
+        { role: "system" as const, content: systemText(snapshot, context, outputSchema) },
         { role: "user" as const, content: canonicalJson({ ...snapshot, responseContract: responseContract(snapshot) }) }
       ]
     };

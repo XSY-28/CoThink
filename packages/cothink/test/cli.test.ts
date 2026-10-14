@@ -20,7 +20,7 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-it("runs peer-only start, show and export with key-file credentials over real loopback HTTP", async () => {
+it("runs default discussion start, show and final export with key-file credentials over real loopback HTTP", async () => {
   const calls: Array<{ model: string; auth: string | undefined }> = [];
   server = createServer(async (req, res) => {
     const chunks: Buffer[] = [];
@@ -28,26 +28,23 @@ it("runs peer-only start, show and export with key-file credentials over real lo
     const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     calls.push({ model: body.model, auth: req.headers.authorization });
     const context = JSON.parse(body.messages[1].content),
-      template = context.responseContract.template;
-    const payload = {
-      ...template,
-      conclusion: "Synthetic independent position",
-      ...(context.phase === "opening"
-        ? {
-            claims: [
-              { statement: "Synthetic hypothesis", rationale: "Synthetic reason", assumptions: [], sourceRefs: [] }
-            ]
-          }
-        : context.phase === "discussion"
-          ? { actions: [], readyToReview: true }
-          : {
-              positions: template.positions.map((p: { versionId: string }) => ({
-                ...p,
-                stance: "uncertain",
-                rationale: "Synthetic review"
-              }))
-            })
-    };
+      member = body.model === "a" ? "member-a" : "member-b";
+    const slots = context.responseContract.byMember[member],
+      payload = structuredClone(slots.template);
+    if (payload.phase === "opening") {
+      payload.claims = [{ statement: "Internal claim", rationale: "Internal basis", assumptions: [], sourceRefs: [] }];
+      payload.answer.body = "Independent initial answer";
+      payload.complexity = "simple";
+      payload.complexityRationale = "One exchange suffices";
+    } else if (payload.phase === "discussion") {
+      payload.answer.body = "Final public answer";
+      payload.answer.basisVersionIds = slots.referenceSlots.activeBasisVersionIds;
+      payload.readyToReview = true;
+    } else
+      for (const position of payload.positions) {
+        position.stance = "accept";
+        position.rationale = "Independent review";
+      }
     res.writeHead(200, { "content-type": "application/json" });
     res.end(
       JSON.stringify({
@@ -105,7 +102,7 @@ it("runs peer-only start, show and export with key-file credentials over real lo
     ).ok
   ).toBe(true);
   expect(errors).toEqual([]);
-  expect(calls).toHaveLength(8);
+  expect(calls).toHaveLength(6);
   expect(calls.every((c) => c.auth === `Bearer fake-${c.model}`)).toBe(true);
   expect((await runCoThink(["show", "installed-flow", "--root", sessions], io)).ok).toBe(true);
   const output = join(root, "report.json");
@@ -113,10 +110,10 @@ it("runs peer-only start, show and export with key-file credentials over real lo
     (await runCoThink(["export", "installed-flow", "--root", sessions, "--format", "json", "--output", output], io)).ok
   ).toBe(true);
   const report = JSON.parse(await readFile(output, "utf8"));
-  expect(report).toMatchObject({ status: "completed", reviewStatus: "complete" });
-  expect(report.reviews).toHaveLength(2);
+  expect(report).toMatchObject({ outcome: "consensus", answer: "Final public answer" });
+  expect(report.reviews).toBeUndefined();
   expect(await readFile(output, "utf8")).not.toContain("fake-a");
-  expect(calls).toHaveLength(8);
+  expect(calls).toHaveLength(6);
 });
 
 it("exposes CoThink peer-only help/version without old representative execution", async () => {
@@ -135,6 +132,8 @@ it("initializes a generic editable configuration without prompts, keys or networ
     envFile = join(root, "keys.env");
   expect((await runCoThink(["init", "--config", config, "--env-file", envFile], io, { env: {} })).ok).toBe(true);
   const parsed = JSON.parse(await readFile(config, "utf8"));
+  expect(parsed.configVersion).toBe(2);
+  expect(parsed.discussion.effort).toBe("standard");
   expect(parsed.members["member-a"].profile).toBe("openai-compatible");
   expect(parsed.members["member-b"].profile).toBe("openai-compatible");
   expect((await runCoThink(["init", "--config", config, "--env-file", envFile], io)).ok).toBe(false);
@@ -254,4 +253,108 @@ it("rejects missing credentials and invalid native tuning before creating a paid
     expect(result.code).toBe(1);
     await expect(readFile(join(sessions, `preflight-${index}`, "session.json"), "utf8")).rejects.toThrow();
   }
+});
+
+it("redacts both fake credentials in saved provider failures and keeps internal diagnostics off public channels", async () => {
+  const sentinel = "INTERNAL_DISCUSSION_SENTINEL";
+  let calls = 0;
+  server = createServer(async (req, res) => {
+    for await (const _ of req) {
+      void _;
+    }
+    calls++;
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(
+      JSON.stringify({
+        id: "failure",
+        object: "chat.completion",
+        created: 1,
+        model: "mock",
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: "assistant",
+              content: `${sentinel} fake-a fake-b`,
+              reasoning_content: `${sentinel} fake-a fake-b`
+            },
+            finish_reason: "stop"
+          }
+        ],
+        usage: { prompt_tokens: 2, completion_tokens: 3 }
+      })
+    );
+  });
+  await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") throw Error("missing port");
+  const config = join(root, "failed-config.json"),
+    keys = join(root, "keys.env"),
+    sessions = join(root, "sessions");
+  await writeFile(
+    config,
+    JSON.stringify({
+      configVersion: 2,
+      members: {
+        "member-a": {
+          protocol: "openai-compatible",
+          baseUrl: `http://127.0.0.1:${address.port}/v1`,
+          modelId: "a",
+          apiKeyEnv: "A"
+        },
+        "member-b": {
+          protocol: "openai-compatible",
+          baseUrl: `http://127.0.0.1:${address.port}/v1`,
+          modelId: "b",
+          apiKeyEnv: "B"
+        }
+      }
+    })
+  );
+  await writeFile(keys, "A=fake-a\nB=fake-b\n");
+  expect(
+    (
+      await runCoThink(
+        [
+          "start",
+          "--config",
+          config,
+          "--env-file",
+          keys,
+          "--root",
+          sessions,
+          "--session-id",
+          "bad-model",
+          "--question",
+          "Synthetic?",
+          "--json"
+        ],
+        io,
+        { env: {} }
+      )
+    ).code
+  ).toBe(2);
+  expect(calls).toBe(2);
+  expect(JSON.parse(logs.join("\n")).outcome).toBe("incomplete");
+  const publicText = [...logs, ...errors].join("\n");
+  expect(publicText).not.toContain(sentinel);
+  expect(publicText).not.toContain("fake-a");
+  expect(publicText).not.toContain("fake-b");
+  const privateText = await readFile(join(sessions, "bad-model", "session.json"), "utf8");
+  expect(privateText).toContain(sentinel);
+  expect(privateText).not.toContain("fake-a");
+  expect(privateText).not.toContain("fake-b");
+  logs = [];
+  errors = [];
+  expect(
+    (
+      await runCoThink(
+        ["show", "bad-model", "--root", sessions, "--json", "--env-file", join(root, "absent.env")],
+        io,
+        { env: {} }
+      )
+    ).code
+  ).toBe(2);
+  expect(calls).toBe(2);
+  expect([...logs, ...errors].join("\n")).not.toContain(sentinel);
 });

@@ -11,6 +11,19 @@ export const DISCUSSION_OUTPUT_FLOOR = 2048;
 export const REVIEW_OUTPUT_FLOOR = 4096;
 export const REVIEW_TOKENS_PER_ITEM = 256;
 
+/** A valid operation cannot fit within the currently authorized hard caps. */
+export class BudgetCapacityError extends Error {
+  override readonly name = "BudgetCapacityError";
+}
+
+export interface BudgetExtension {
+  readonly extensionId: string;
+  readonly atMs: number;
+  readonly extraCalls: number;
+  readonly extraAllocatedOutputTokens: number;
+  readonly extendMs: number;
+}
+
 type Allocation = Readonly<Record<AgentId, number>>;
 export type BudgetPhase = "opening" | "discussion" | "review";
 export type AttemptOutcome = "succeeded" | "failed" | "cancelled" | "unknown";
@@ -52,6 +65,7 @@ export interface BudgetLedger {
   readonly roundLimit?: number;
   readonly attempts: readonly BudgetAttempt[];
   readonly reservations: readonly ReviewReservation[];
+  readonly extensions?: readonly BudgetExtension[];
 }
 export interface AttemptBatch {
   readonly phase: BudgetPhase;
@@ -102,7 +116,10 @@ function freezeLedger(ledger: BudgetLedger): BudgetLedger {
         })
       )
     ),
-    reservations: Object.freeze(ledger.reservations.map(freezeReservation))
+    reservations: Object.freeze(ledger.reservations.map(freezeReservation)),
+    ...(ledger.extensions === undefined
+      ? {}
+      : { extensions: Object.freeze(ledger.extensions.map((extension) => Object.freeze({ ...extension }))) })
   });
 }
 
@@ -125,7 +142,7 @@ export function allocateDiscussionTokens(
       throw new Error("Participation weight must be finite and between 0.1 and 100");
   }
   const remainder = BigInt(totalPool) - BigInt(floor) * BigInt(memberIds.length);
-  if (remainder < 0n) throw new Error("Output budget cannot fund every member floor");
+  if (remainder < 0n) throw new BudgetCapacityError("Output budget cannot fund every member floor");
   // Values in 0.1..100 stringify as plain decimal numbers. Scale them to
   // integers so very large pools and nearly equal weights remain deterministic.
   const decimals = memberIds.map((id) => weights[id]!.toString().split("."));
@@ -219,9 +236,14 @@ export function remainingBudget(ledger: BudgetLedger, nowMs: number) {
     if (pending.length) reservedReviewDurationMs = Math.max(reservedReviewDurationMs, reservation.windowMs);
   }
   return {
-    remainingCalls: ledger.policy.maxCalls - ledger.attempts.length,
+    remainingCalls:
+      ledger.policy.maxCalls +
+      (ledger.extensions ?? []).reduce((total, extension) => total + extension.extraCalls, 0) -
+      ledger.attempts.length,
     remainingAllocatedOutputTokens:
-      ledger.policy.maxAllocatedOutputTokens - ledger.attempts.reduce((total, a) => total + a.maxOutputTokens, 0),
+      ledger.policy.maxAllocatedOutputTokens +
+      (ledger.extensions ?? []).reduce((total, extension) => total + extension.extraAllocatedOutputTokens, 0) -
+      ledger.attempts.reduce((total, a) => total + a.maxOutputTokens, 0),
     remainingDurationMs: Math.max(0, ledger.deadlineAtMs - nowMs),
     reservedCalls,
     reservedOutputTokens,
@@ -234,9 +256,9 @@ function assertCapacity(ledger: BudgetLedger, nowMs: number): void {
     remaining.remainingCalls < remaining.reservedCalls ||
     remaining.remainingAllocatedOutputTokens < remaining.reservedOutputTokens
   )
-    throw new Error("Budget cannot fund all attempts and complete review quotas");
+    throw new BudgetCapacityError("Budget cannot fund all attempts and complete review quotas");
   if (remaining.remainingDurationMs < remaining.reservedReviewDurationMs || remaining.remainingDurationMs <= 0)
-    throw new Error("Time budget cannot fund the full review window before the deadline");
+    throw new BudgetCapacityError("Time budget cannot fund the full review window before the deadline");
 }
 
 /** Reserve all reviewers atomically. Coverage may grow before dispatch, never shrink. */
@@ -333,7 +355,7 @@ export function reserveAttemptBatch(ledger: BudgetLedger, batch: AttemptBatch, n
     allocation = frozenAllocation(pendingMembers(reservation).map((id) => [id, reservation!.allocation[id]!]));
     timeoutMs = reservation.windowMs;
     if (balance.remainingDurationMs < timeoutMs)
-      throw new Error("Time budget cannot fund a complete review before the deadline");
+      throw new BudgetCapacityError("Time budget cannot fund a complete review before the deadline");
   } else {
     if (batch.reservationId !== undefined) throw new Error("Non-review attempts cannot consume a review reservation");
     if (
@@ -353,7 +375,8 @@ export function reserveAttemptBatch(ledger: BudgetLedger, batch: AttemptBatch, n
       allocation = allocateRoundTokens(ledger.policy, batch.roundIndex);
     }
     timeoutMs = Math.min(ledger.policy.callTimeoutMs, balance.remainingDurationMs - balance.reservedReviewDurationMs);
-    if (timeoutMs <= 0) throw new Error("Time budget is reserved for complete review before the deadline");
+    if (timeoutMs <= 0)
+      throw new BudgetCapacityError("Time budget is reserved for complete review before the deadline");
   }
   const members = Object.keys(allocation);
   exactMembers(members, batch.attemptIds);
@@ -388,6 +411,135 @@ export function reserveAttemptBatch(ledger: BudgetLedger, batch: AttemptBatch, n
       : item
   );
   const next = { ...ledger, lastRecordedAtMs: nowMs, attempts: [...ledger.attempts, ...additions], reservations };
+  assertCapacity(next, nowMs);
+  return freezeLedger(next);
+}
+
+/** Explicit authorization adds capacity without rewriting a segment's original policy. */
+export function extendDiscussionBudget(
+  ledger: BudgetLedger,
+  extension: {
+    readonly extensionId: string;
+    readonly extraCalls?: number;
+    readonly extraAllocatedOutputTokens?: number;
+    readonly extendMs?: number;
+  },
+  nowMs: number
+): BudgetLedger {
+  clock(ledger, nowMs);
+  identifier(extension.extensionId, "budget extension ID");
+  if (ledger.extensions?.some((item) => item.extensionId === extension.extensionId))
+    throw new Error("Budget extension ID must be unique");
+  const addition: BudgetExtension = {
+    extensionId: extension.extensionId,
+    atMs: nowMs,
+    extraCalls: extension.extraCalls === undefined ? 0 : extension.extraCalls,
+    extraAllocatedOutputTokens:
+      extension.extraAllocatedOutputTokens === undefined ? 0 : extension.extraAllocatedOutputTokens,
+    extendMs: extension.extendMs === undefined ? 0 : extension.extendMs
+  };
+  integer(addition.extraCalls, "Extra calls");
+  integer(addition.extraAllocatedOutputTokens, "Extra allocated output tokens");
+  integer(addition.extendMs, "Deadline extension");
+  if (!addition.extraCalls && !addition.extraAllocatedOutputTokens && !addition.extendMs)
+    throw new Error("Budget extension must add positive capacity");
+  const extensions = [...(ledger.extensions ?? []), addition];
+  integer(ledger.policy.maxCalls + extensions.reduce((sum, item) => sum + item.extraCalls, 0), "Call cap");
+  integer(
+    ledger.policy.maxAllocatedOutputTokens + extensions.reduce((sum, item) => sum + item.extraAllocatedOutputTokens, 0),
+    "Allocated output cap"
+  );
+  const deadlineAtMs = ledger.deadlineAtMs + addition.extendMs;
+  integer(deadlineAtMs, "Segment deadline");
+  return freezeLedger({ ...ledger, extensions, deadlineAtMs, lastRecordedAtMs: nowMs });
+}
+
+/** Charge only explicitly missing members using the already frozen request's output cap. */
+export function reserveRetryAttempts(
+  ledger: BudgetLedger,
+  attemptIds: Readonly<Record<AgentId, string>>,
+  priorAttemptIds: Readonly<Record<AgentId, string>>,
+  nowMs: number
+): BudgetLedger {
+  clock(ledger, nowMs);
+  const roster = ledger.policy.roundingOrder;
+  if (
+    attemptIds === null ||
+    typeof attemptIds !== "object" ||
+    Array.isArray(attemptIds) ||
+    !Reflect.ownKeys(attemptIds).length ||
+    Reflect.ownKeys(attemptIds).some((key) => typeof key !== "string" || !roster.includes(key))
+  )
+    throw new Error("Retry must include a nonempty subset of known members");
+  const members = roster.filter((id) => Object.hasOwn(attemptIds, id));
+  exactMembers(members, priorAttemptIds);
+  const seen = new Set(ledger.attempts.map((attempt) => attempt.attemptId));
+  const previous = members.map((memberId) => {
+    const attemptId = attemptIds[memberId]!;
+    identifier(attemptId, "attempt ID");
+    if (seen.has(attemptId)) throw new Error("Attempt ID must be unique");
+    seen.add(attemptId);
+    const prior = ledger.attempts.find((attempt) => attempt.attemptId === priorAttemptIds[memberId]);
+    if (!prior || prior.memberId !== memberId) throw new Error("Retry must reference the member's existing attempt");
+    const checkpointId = ledger.reservations.find((item) => item.reservationId === prior.reservationId)?.checkpointId;
+    const latest = [...ledger.attempts]
+      .reverse()
+      .find(
+        (attempt) =>
+          attempt.memberId === memberId &&
+          attempt.phase === prior.phase &&
+          attempt.roundIndex === prior.roundIndex &&
+          (prior.phase !== "review" ||
+            ledger.reservations.find((item) => item.reservationId === attempt.reservationId)?.checkpointId ===
+              checkpointId)
+      );
+    if (prior !== latest || prior.status === "pending" || prior.status === "succeeded")
+      throw new Error("Only the latest failed, cancelled or unknown member attempt may be explicitly retried");
+    return { prior, checkpointId, attemptId };
+  });
+  const first = previous[0]!;
+  if (
+    previous.some(
+      ({ prior, checkpointId }) =>
+        prior.phase !== first.prior.phase ||
+        prior.roundIndex !== first.prior.roundIndex ||
+        (prior.phase === "review" && checkpointId !== first.checkpointId)
+    )
+  )
+    throw new Error("Retry members must belong to the same phase and round or review checkpoint");
+  if (first.prior.phase === "review") {
+    let next = ledger;
+    for (const { prior, checkpointId, attemptId } of previous) {
+      const reservationId = `${attemptId}:reservation`;
+      next = reserveReviewRetry(next, reservationId, checkpointId!, prior.memberId, nowMs);
+      next = reserveAttemptBatch(
+        next,
+        { phase: "review", reservationId, attemptIds: { [prior.memberId]: attemptId } },
+        nowMs
+      );
+    }
+    return next;
+  }
+  if (!ledger.reservations.some((item) => item.kind === "checkpoint" && pendingMembers(item).length === roster.length))
+    throw new Error("Reserve a complete review before non-review dispatch");
+  const balance = remainingBudget(ledger, nowMs);
+  const timeoutMs = Math.min(
+    ledger.policy.callTimeoutMs,
+    balance.remainingDurationMs - balance.reservedReviewDurationMs
+  );
+  if (timeoutMs <= 0) throw new BudgetCapacityError("Time budget is reserved for complete review before the deadline");
+  const additions: BudgetAttempt[] = previous.map(({ prior, attemptId }) => ({
+    attemptId,
+    memberId: prior.memberId,
+    phase: prior.phase,
+    ...(prior.roundIndex === undefined ? {} : { roundIndex: prior.roundIndex }),
+    maxOutputTokens: prior.maxOutputTokens,
+    chargedAtMs: nowMs,
+    timeoutMs,
+    deadlineAtMs: nowMs + timeoutMs,
+    status: "pending"
+  }));
+  const next = { ...ledger, lastRecordedAtMs: nowMs, attempts: [...ledger.attempts, ...additions] };
   assertCapacity(next, nowMs);
   return freezeLedger(next);
 }

@@ -6,3 +6,8 @@ export * from "./protocol.js";
 export * from "./context.js";
 export * from "./codec.js";
 export * from "./json-codec.js";
+export * from "./consensus.js";
+export * from "./decision.js";
+export * from "./result.js";
+export * from "./store.js";
+export * from "./engine.js";

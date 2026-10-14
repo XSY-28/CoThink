@@ -1,8 +1,8 @@
 # CoThink 讨论模式实施进度
 
-日期：2026-10-14。阶段 0–2 已完成；阶段 3–7 未开始。
+日期：2026-10-14。阶段 0–5 已完成；阶段 6–7 未开始。
 
-当前状态见文末阶段 2 记录。此前内容保留为阶段 0/1 当时的验收与边界。
+当前状态见文末阶段 5 记录。此前内容保留为阶段 0/1 当时的验收与边界。
 
 ## 范围与起点
 
@@ -212,3 +212,224 @@
 ### 重复请求复核（2026-10-14）
 
 再次收到同一阶段 2 请求后，重新读取 AGENTS、计划与本记录，核对现有实现和 Git 状态。本次定向运行 answers/protocol/codec 三个测试文件，**131/131 通过**；Git diff 空白检查通过。阶段 2 已满足本次范围，因此没有重复实现、改动源码或进入阶段 3；仅补充此复核记录。全仓 917 项及 build/check/lint/format 的证据仍为上述阶段 2 完成时的运行，本次未重复全仓检查。没有提交、推送、发布或真实模型调用。
+
+## Git 里程碑与阶段 3：共识和最终选择
+
+日期：2026-10-14。阶段 0–2 的 Git 检查点已在草稿 PR；阶段 3 实现仅保留本地，阶段 4–7 未开始。
+
+### Git/PR/CI 检查点
+
+- 本次读取 AGENTS、完整计划与交接，检查工作区干净、当前功能分支 `discussion-stage-0`。本地与远端均为 `5286634f61160e7a8044bfef5b82237ec7ecdc2b`，`main` 仍为 `af34aac`。阶段 0–2 的 37 个文件已在该上传提交中，因此复用现有里程碑，不制造空提交，也不重新提交相同文件。
+- 本次重新运行 format、lint、release:check：917 项测试、构建、类型检查和 smoke:pack / smoke:cothink 均通过；未以历史日志代替当前验证，没有真实模型 API 调用。
+- 创建并附加 [草稿 PR #1](https://github.com/XSY-28/CoThink/pull/1)，base main、head discussion-stage-0。没有合并、强推、打 tag、npm/Release 发布。
+- [CI run 38501779551](https://github.com/XSY-28/CoThink/actions/runs/38501779551) 在上述提交上实际 success；[Node.js 22](https://github.com/XSY-28/CoThink/actions/runs/38501779551/job/115650174034) 和 [Node.js 24](https://github.com/XSY-28/CoThink/actions/runs/38501779551/job/115650173890) 均完成 lint/format/check/build/test 和两项安装检查。无本次变更引起的失败需要修复。通过后才开始阶段 3。
+
+### 本地变更与职责
+
+| 文件                                                                   | 职责                                                                                                   |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `packages/argue/src/discussion/consensus.ts`                           | 当前完整评议绑定、全体接受的候选计算、严格版本图上的异议关联。不排名或生成最终文本。                   |
+| `packages/argue/src/discussion/decision.ts`                            | 明确停止原因下的共识优先、最高决策偏好回退、并列与 incomplete 选择。正文直接复制保存版本，不调用模型。 |
+| `packages/argue/src/discussion/result.ts`                              | FinalResult/ImportantDissent、宿主约束证据、输出结构与原正文/原作者评议来源验证。                      |
+| `packages/argue/src/discussion/index.ts`                               | 追加三个模块导出，已有出口保留。                                                                       |
+| `packages/argue/test/discussion/consensus.test.ts`、`decision.test.ts` | 离线反例、完整 reducer 状态、来源不可伪造和确定性回归。                                                |
+
+旧 peer、传输、存储、policy/budget、版本 schema、codec 和协议 reducer 未改动。没有网络、磁盘、调度或 CLI 依赖进入这三个新模块。
+
+### 接口与规则
+
+`evaluateConsensus(session, constraintChecks = [])` 返回已共同接受的 AnswerVersion 候选，不选择最终胜者。先用严格重放验证 session，再要求当前 phase 为 review、无 pending seal、最新 epoch 完整提交、全 roster、contextHash/contextVersion、当前观点/答案集合都准确匹配。历史 epoch、A1 的票或历史可读依据不能确认 A2。
+
+每个成员必须明确接受同一个 answerVersionId 及其全部当前 basisVersionIds；任一依据 uncertain/reject 或未在当前集合中就失败。空观点和空依据不按真空条件认定共识，这是首版保守规则。与候选无关的备选观点可继续分歧，不要求所有观点或所有候选都同意。未回应定向消息阻止共识。
+
+相关异议根据保存的答案 previousVersionId 链、依据版本链或答案的显式 unresolvedObjectionIds 判断，不用字符串相似度、ID 前缀或权重。当前 epoch 中的相关 material/blocking 异议只有原提出者明确 resolved/withdrawn 才解除；其他成员的 stance 不能替代作者状态。状态在前一完整检查点已经解决的异议，沿用前置协议的已解决状态；需要新异议时另行提出，而非偷偷改旧记录。
+
+`selectFinalResult({ session, stopReason, constraintChecks? })` 是纯函数。stopReason 必须由宿主明确提供：
+
+- 当前完整检查点存在共识候选时，直接复制选中候选正文和 limitations。多个候选均获共同接受才使用 decisionWeight 排序；并列按 body、排序后的 basis IDs、limitations、排序后的异议 IDs 的 canonical 内容 hash，最终等价 tie 用 versionId 固定排序。此规则属于 discussion-policy-v1，不裁决未获接受的候选。
+- `checkpoint` 下没有共识，返回 incomplete/discussion_continues，不伪装正常到限。
+- `round_limit` 必须达到冻结政策与 opening 复杂度导出的轮数上限，且有当前完整 review；否则 incomplete。`budget_limit` 是未来预算宿主提供的明确正常资源到限信号；本函数不计算调度或证明预算已经耗尽。
+- interrupted/deadline/model_failure、缺少当前完整 review、最高偏好成员缺少有效提交答案或约束失败均 incomplete；不采用 sealed/raw 回应，不改选次高成员。缺少最高偏好答案的结果记录 missingAnswerMemberIds 供未来恢复展示，不生成答案正文。
+- 无共识且正常到限，选择最高 decisionWeight 成员的当前最后有效提交版，保留原正文、限制和有来源的重要异议。participationWeight 不参与选择。
+- 最高偏好并列且未共识时，outcome 为 tied_preferences，answer 为空；alternatives 逐项保留所有最高偏好的真实版本及正文，selectedAnswerVersionIds 记录它们，无固定胜者、无合并新正文，即使文字相同也不冒充同一版本共识。
+
+重要异议只取当前完整 review 中原作者 retained 的 summary/impact/evidenceNeeded。所有 blocking 保留，其他直接关联所选答案的 material 保留，低权重不会抹掉异议；只按 objectionId 去重，不合并措辞相似的不同异议。目标版本 ID 和 severity 均保留来源，不自由重写目标或摘要。
+
+### 约束输入与来源边界
+
+ConstraintCheck 是宿主单独输入 `{checkId, source: host, contextHash, answerVersionId: string|null, status: passed|failed, evidence}`。null 表示全局上下文检查，具体 ID 只约束该当前候选；失败不能被权重覆盖，已失败的并列候选也不能被静默删除后单选另一成员。不同候选有共同接受且有效的方案时，可以形成该方案的共识，而非按偏好绕过失败。
+
+重复、过期上下文、旧/未知答案或 model source 检查拒绝，不自动转移给新版本。模型 turn 不提供这些检查；其文字“已验证”不会生成 host 证据。本阶段不执行外部验证器，也不判断 evidence 的事实真伪；宿主必须负责可信来源及实际检查。
+
+`parseFinalResultSources` 验证输出结构、session/epoch、保存正文/限制和原作者异议字段的逐项来源，不能自由补写或改写答案。它只验证这些来源，不独立证明共识 outcome、外部事实或宿主到限信号；policy 判断由 selectFinalResult 负责，运行与可信输入由后续引擎负责。
+
+### 验证与边界
+
+- 共识 41 项：完整双/三成员、同文不同版本票、依据拒绝/不确定、备选观点分歧、历史依据、旧票、新版本、完整覆盖与 hash、未回应消息、保留异议、作者解决、版本链关联、空集合和宿主失败/过期证据等。
+- 选择 30 项：最新版本回退、只换决策偏好且讨论记录不变、参与偏好不决定来源、共同接受候选中的排名、正常到限/异常/半批、并列全保留、低偏好原作者最新摘要、不同 ID 同文本不合并、约束不能被偏好覆盖、禁止伪造正文/作者/摘要、缺少最高偏好答案等。
+- 共识先写人工反例和惯性占位实现，出现 21 failed / 13 passed 的语义 RED 后实现并扩展到 GREEN。缺少最高偏好成员的恢复标识也先写失败断言，再补结果字段与来源校验。所有计算不改变输入状态，不发模型调用。
+
+最终本地验证：`npm run build`、`npm run check`、`npm run lint`、`npm run format:check`、`npm run test` 全部通过。**71 项新增测试**，全仓 **988 项**（core 465、CLI 418、viewer 85、CoThink 20），包含旧协议/版本哈希/传输/存储回归。编译后 core 的当前共识判断及原正文选择离线 smoke 通过。独立审查 0 个可行动问题；缺失成员标识补丁也已静态复核并通过最终测试。修改前摘要确认只有 7 个约定文件变化，其余检查点源码不变，最终 Git diff 空白检查通过。
+
+阶段 3 尚未提交或推送，PR/远端 CI 只覆盖阶段 0–2 的 checkpoint。没有阶段 4 的实际提前停止调用、attempt/ledger 接线、持久化最终结果、恢复、真实 API、施工同步、自然语言判真或 CLI/浏览界面；本阶段提供可供未来引擎消费的纯候选与结果。预算到限真实性、宿主验证证据可信性及新段政策切换由后续宿主保证。本次停止在阶段 3。
+
+## 阶段 4：讨论调度、持久化和恢复
+
+日期：2026-10-14。阶段 4 实现保留本地；普通 CLI 接线与展示仍待阶段 5。
+
+### 起点及保留范围
+
+读取 AGENTS、计划及交接后，核对 `discussion-stage-0` 和阶段 0–2 的 `5286634` 检查点。阶段 3 的源码、测试及记录已经在未提交工作区，未重复实现。修改前重新通过 workspace 类型检查和 **334 项 discussion 测试**，未将历史 988 项成绩当成本阶段验证。文件摘要比对确认 `consensus.ts`、`decision.ts`、`result.ts` 及两份阶段 3 测试原字节保留。
+
+旧 peer 协议、固定哈希样本、传输适配、原子快照/写锁实现、CLI 命令展示、依赖、版本号及发布配置保持不变。新增 CLI 出口仅导出 FileDiscussionStore，不让普通命令创建或展示 discussion。实现过程没有真实模型 API、Git 暂存/提交/推送/合并或发布。
+
+### 变更及职责
+
+| 文件                                                                                                                 | 职责                                                                                                                                                       |
+| -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/argue/src/discussion/engine.ts`                                                                            | DiscussionEngine：独立 opening、全员交流、完整检查点、继续讨论、正常结束与暂停；通过 ModelTransport 和窄 store 接口接线，不依赖磁盘或 CLI。                |
+| `packages/argue/src/discussion/store.ts`                                                                             | `discussion.runtime.v1` 运行记录、冻结 job/call、attempt 关联、seal、观测、段和事件；严格重放所有缓存及追加式 transition，重新核实真实停止条件与最终选择。 |
+| `packages/argue-cli/src/discussion/file-store.ts`、`src/index.ts`                                                    | FileDiscussionStore 挂载已有 FileSnapshotStore，复用私有原子快照、writer/recovery lease、串行写入及 revision CAS；宿主在 withWriter 内使用引擎。           |
+| `packages/argue/src/discussion/budget.ts`、`test/discussion/budget.test.ts`                                          | 缺失成员显式重试和独立预算扩额记录；BudgetCapacityError 区分容量不足；原冻结 policy、失败/unknown 占用不变。                                               |
+| `packages/argue/src/discussion/contracts.ts`、`protocol.ts`、`index.ts`                                              | 新段的 segmentId/contextVersion 初始化与严格重放接缝、运行模块出口；默认初段仍为 1，旧协议未改。                                                           |
+| `packages/argue/src/discussion/json-codec.ts`                                                                        | 校验保存的 JSON-v1 请求实际表达，绑定共享语义、真实引用槽位、system 和 schema；不调用 encode 或重新生成旧请求。                                            |
+| `packages/argue/test/discussion/engine.test.ts`、`store.test.ts`                                                     | scripted transport、fake clock、严格 JSON 往返、停止反例、冻结重试、迟到、取消、CAS、observer、新段和已知约束恢复。                                        |
+| `packages/argue-cli/test/discussion/file-store.test.ts`、`crash-fixture.mjs`、`signal.test.ts`、`signal-fixture.mjs` | 真实临时磁盘、双进程 writer、CAS、SIGKILL 六边界及真实 SIGINT；子进程使用本次构建产物，不使用模型网络服务。                                                |
+
+### 运行及持久化约定
+
+- `start(input, signal?)` 先保存初段，再运行。每批冻结模型配置、codec 版本、共享上下文、身份、输出帽、完整 messages/schema 和 inputHash；`prepared` 原子保存这些请求、attempt 和预算占用后才 dispatch。transport 收到保存 call 的副本，不能改写历史。
+- 所有成员独立读取同一共享语义；没有模型主持、裁决或汇总。`settled` 只封存有效回复及观测，成功半批不修改答案。全体有效后 `commit_batch` 一次提交；review 不修订候选答案。
+- `run/recover` 对 active 状态仅保存暂停，把 pending 记为 unknown；即便崩溃点没有 pending，也不自动运行下一阶段。completed/paused 读取不调用模型。首次 retry/continue 遇到 active 也仅恢复；再次显式操作才推进。
+- `retry` 只补缺失成员，复用原 job、call、inputHash 和输出帽；成功 sealed 成员不重问。失败、取消、unknown 与请求输出帽均不退款；新尝试重新占用额度。缺少完整额度就保持暂停，不删除低权重成员。
+- 预算不足以开始另一轮交流但足够完整评议时，使用已预留额度进入 review。只有当前完整检查点才可能正常结束：有共识为 checkpoint；达到冻结轮数为 round_limit；实际容量不能再支持交流及全员评议为 budget_limit。deadline、SIGINT、模型失败或不完整评议只暂停，不生成正常回退结果。
+- 调度从保存状态重新检查交流的 readiness、未回应消息、轮数与预算；也复用已保存但未使用的新 review reservation。交流提交后或预留下轮 review 后的崩溃不会跳过检查点或重复预留。
+- 完整评议后，宿主约束证据以 `constraints_checked` 追加保存。同一 checkId 不可静默覆盖；重启或缺省新 options 不能忘记已知失败。针对旧答案的检查保留历史，但不会迁移到新版本；全局检查留在所属段。有效检查、共识规则和真实 stop 都在最终保存及重放中核对，不能仅以正文来源验证替代。
+- FinalResult 直接使用阶段 3 函数及保存答案，正文不补写；并列保留备选。保存后段不可修改，重启/retry 返回同一结果且零调用。已知约束失败暂停，保留检查证据，不保存虚假的成功结果。
+- `continue` 追加新段，冻结新材料、模型配置、政策及两类权重，重新 opening；旧段的请求、账本、权重、答案和最终结果保持原样。新段不会继承旧上下文的宿主检查证据。
+- 扩额只接受暂停状态下显式提供的 `extraCalls`、`extraAllocatedOutputTokens`、`extendMs`，作为 ledger.extensions 追加；不覆写原 policy，也不退款。不会自动扩额。时刻由宿主提供非负、单调安全整数毫秒；AbortSignal 由宿主连接 SIGINT，core 不安装全局进程信号监听。
+- 保存成功后通知 observer，其同步异常/异步 rejection 不回滚、不增加调用。调用超时和取消使用独立 AbortController；忽略取消的 transport 迟到回复也不能再次 seal、提交或改写结果。写入冲突直接失败，不伪装模型失败、约束失败或正常到限。
+
+### 本次实际验证
+
+环境：macOS、Node.js 24.19.0、npm 11.17.0。全部模型响应为 scripted；既有传输及安装 smoke 仅访问 loopback HTTP。
+
+| 验收               | 当前代码的实际证据                                                                                                                                                                                                     |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 首个检查点共识早停 | opening 2 + discussion 2 + review 2 = **6 次调用**；run/retry/reload 零新增调用，结果来自保存版本。                                                                                                                    |
+| 四轮完整评议均分歧 | **18 次调用**，4 个 committed review；实际 round_limit，回退为最高决策权重成员第 4 轮最新答案。                                                                                                                        |
+| 完整评议预留       | maxCalls=6 且双方尚未 ready 时也以预留额度完成 review 后正常 budget_limit；初始额度不足零调用暂停，全员保留，显式扩额另留记录。                                                                                        |
+| 冻结及重试         | 原请求逐项相等，opening encode 仍只有 2 次；半批失败后只补缺失成员。unknown 重试沿用旧 job，但旧占用和新尝试均计账。                                                                                                   |
+| 实际 SIGKILL       | 创建后、prepared 落盘后/dispatch 前、dispatch 后、首个成功 seal 后、整批 commit 后、FinalResult 保存后六处精确停住子进程并 SIGKILL；首次恢复均零调用。seal 后只补缺失成员；final 后原记录/结果不变。                   |
+| 实际 SIGINT        | 两次 dispatch 后给真实子进程发送 SIGINT，宿主桥接 AbortSignal；provider 不主动 settle 仍正常取消退出，磁盘 paused/cancelled，2 次占用不退，无 commit/final，恢复零调用。                                               |
+| 截止和迟到         | fake clock 在硬截止返回成功仍拒绝；fake timers 令不响应 transport 到单调用超时后暂停；取消后迟到 resolve 不改变保存快照，不冒充正常到限。                                                                              |
+| 真实存储和 writer  | 私有 0700/0600 权限、原子快照、半写临时文件、损坏/非法版本/符号链接拒绝；双 CAS 仅一个成功、另一进程活 writer 拒绝、SIGKILL 后 lease 可回收、逃逸 lease 不可写。                                                       |
+| 重放及约束         | 重算哈希仍不能改问题、槽位、system/schema；旧事件 prefix、模型配置、缓存及最终正文/结果/停止条件篡改拒绝。saved request 重放 encode 零次；已知约束失败跨新引擎重试仍拒绝，不能省略已存检查或将旧答案检查当新版本证据。 |
+| 段与前置兼容       | 新段实际改变参与/决策权重、模型选项和材料，旧段整体逐项相等；旧 peer 恢复、50 份请求/哈希固定样本、路由、HTTP 适配及存储回归继续通过。                                                                                 |
+
+最终重新构建后运行 `npm run check`、`npm run test`、`npm run lint`、`npm run format:check`、`npm run smoke:pack` 和 `npm run smoke:cothink`，全部退出 0。全仓 **1,066 项**：core 532、CLI 429、viewer 85、CoThink 20；相较阶段 3 新增 **78 项**（budget 13、store 30、engine 24、真实磁盘/进程 11）。最后一次全量运行覆盖约束持久化补丁，并复跑最终构建产物下六处 SIGKILL 和真实 SIGINT。安装检查仍证明既有 CLI tarball 可独立安装，不冒称阶段 5 尚未接线的新版命令已验收。
+
+日志保存在源码仓库外的阶段 4 工作目录：`before-check.log` / `before-tests.log` 是修改前复核，`build-final.log`、`check-final.log`、`test-final.log`、`lint-final.log`、`format-final.log`、`smoke-pack-final.log`、`smoke-cothink-final.log` 是当前代码最终验证；`store-report.md`、`disk-report.md`、`signal-report.md` 和 `review-report.md` 记录定向证据与审查发现。日志和本地会话均未加入源码范围。
+
+独立审查实际复现并推动修复：交流提交后的恢复跳过评议、预算不够却漏用预留评议、宿主失败与恢复 guard 冲突、重算哈希后实际共享消息可篡改，以及预留下一检查点后的恢复窗口。新增持久化约束反例也验证重启不能遗忘已知失败。修复均保留测试，不把首次失败日志改写成通过。
+
+### Git/PR 与未验证边界
+
+本次只读核对 [草稿 PR #1](https://github.com/XSY-28/CoThink/pull/1)：仍为 OPEN/DRAFT，head `5286634f61160e7a8044bfef5b82237ec7ecdc2b`；Node 22/24 checks 仍 success，仅覆盖阶段 0–2。阶段 3 和 4 未暂存、提交或推送；远端 CI 没有验证这些本地增量。
+
+- 没有真实 provider 调用、付费用量、真实取消后的服务端计费或模型输出质量校准。请求输出帽和尝试预算已离线验证，不代表已验证 provider 的实际计费。
+- 真实文件/进程验证为本机 macOS/Node 24；本阶段尚未执行 Node 22、其他 OS、断电/物理磁盘故障、文件系统级故障注入或大型会话性能验收。全历史严格重放会增加长记录验证成本，未做性能优化。
+- JSON-v1 保存表达严格验证已经接线；不同交流语言的运行记录与表示替换验收仍在阶段 7。阶段 2 的独立 codec 领域校验保留。宿主检查的事实可信性仍由调用方负责，本阶段不运行外部检查器。
+- 普通 CoThink CLI 仍使用旧 peer 路径；新版配置、结果展示、隐藏过程 sentinel 和新命令接线尚未实现，不以内部可运行引擎冒称新版 CLI 已交付。
+- 既有 request-id 随机碰撞和 dependency advisory 不在本阶段修复范围。
+
+本次停止在阶段 4。下一阶段按计划实施 CLI/配置与隐藏讨论。
+
+## 阶段 5：配置、CLI 接线与隐藏讨论
+
+日期：2026-10-14。阶段 5 已完成，改动保留本地；阶段 6 的真实模型校准及阶段 7 交付验收尚未开始。
+
+### 起点与保留范围
+
+先读取 AGENTS、计划和阶段 4 交接，检查功能分支 `discussion-stage-0` 与 `5286634` 检查点、现有阶段 3/4 未提交成果，保存修改前文件摘要。当前代码重新运行 engine/store **54/54** 回归通过；阶段 4 的历史 1,066 项成绩没有代替本次验证。
+
+阶段 0–4 的所有 `packages/argue/` 源码和测试摘要与修改前一致；没有重复实现引擎、共识、决策、预算、codec 或存储重放。原 peer 驱动和协议也保持不变。CLI 在原功能分支上继续实施；没有新增工作树、暂存、提交、推送、合并、发布、版本调整或依赖改动。
+
+### 变更及职责
+
+| 文件                                                                                                  | 职责                                                                                                                                                   |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/argue-cli/src/discussion/config.ts`、`test/discussion/config.test.ts`                       | configVersion 2 / 旧配置严格识别、两成员 provider 解析、discussion 默认值与显式限制保留；只加载，不改写配置或密钥。                                    |
+| `packages/argue-cli/src/peer/setup.ts`、`test/peer/setup.test.ts`                                     | 新 `setupDiscussionConfig` 收集强度、独立双权重和可选轮数；复用原私有、独立密钥、排他创建与遮蔽输入。原 `setupPeerConfig` 入口保持旧行为。             |
+| `packages/argue-cli/src/discussion/commands.ts`、`test/discussion/commands.test.ts`                   | CLI 参数及优先级、上下文复制、版本分派、现有 DiscussionEngine/PeerSessionDriver 接线、恢复与续接、公开未完成投影和私有最终结果导出；不生成或重写答案。 |
+| `packages/argue-cli/src/discussion/render.ts`、`test/discussion/render.test.ts`                       | 只消费严格 FinalResult；文本、JSON、Markdown、静态 HTML 渲染，不依赖会话、provider、账本、原始响应或完整评议。                                         |
+| `packages/cothink/src/index.ts`、`src/cli.ts`                                                         | 新会话默认 discussion，setup/init 默认 v2，管理命令先识别配置版本；help/参数/退出码；可执行入口阻止 Node 将应用 `--env-file` 当作自己的预加载参数。    |
+| `packages/cothink/test/cli.test.ts`、`session-routing.test.ts`、`discussion.test.ts`、`entry.test.ts` | 实际 loopback、版本/参数/优先级、隐藏标记、权重回退/并列/异议、重试/新段、双凭据脱敏、实际可执行入口与不可变读取。                                     |
+| `scripts/smoke-cothink.mjs`                                                                           | 新鲜 tarball 在源码仓库外通过实际安装的命令入口运行，核对 v2、6 次调用共识、新段、四格式导出、HTML 源码、stdout/stderr 与零调用读取；无上游库依赖。    |
+
+### 配置和输入约定
+
+- 新配置为 `{configVersion: 2, members: {...}, discussion?: {...}}`。members 沿用现有 provider/profile 输入；对外仍严格要求 member-a/member-b。未知版本、未知根字段、缺少成员、非法权重或限制拒绝。旧 `{members: {...}}` 及显式 version 1 只在内存补 standard 和双权重 1；不会迁移或重写原文件。
+- discussion 支持 effort、weights、maxRounds，以及显式调用/输出分配/时长/单调用帽。省略的派生资源帽保持省略，CLI 改 effort 后由原 policy 函数按新档计算。显式限制继续受原 effort 硬帽验证；high 不映射成 provider reasoning 参数。
+- CLI → 配置 → 默认值。`--effort low|standard|high`、`--participation-weight member-a=2`、`--decision-weight member-b=3`、`--max-rounds N` 单独覆盖；未指定的另一权重保留配置值。权重必须有限且在 0.1–100，同一成员的同类覆盖不能重复；没有关闭成员或单 Agent 讨论模式。
+- `start` 恰好选择 `--question` / `--question-file` 之一，拒绝空问题。文件作为 UTF-8 数据读取；`--context` 可重复输入 .md/.txt，约束仍支持重复 `--constraint`。原资料和每成员字符上限继续验证，opening 预检发现超限时不创建会话、不调用模型。
+- `--rounds` 保留为 `--max-rounds` 的兼容别名，两者不可同时使用。旧的每调用 `--max-output-tokens` 不冒充新讨论的累计预算；新讨论显式帽为 `--max-calls`、`--max-allocated-output-tokens`、`--max-duration-ms`、`--call-timeout-ms`。
+- `continue` 缺省沿用保存的模型与政策；显式 `--config` 加载新配置，再应用 CLI 覆盖。显式换 effort 时重新采用该档的默认资源帽，可通过新配置或 CLI 明确收紧；原段不变。新材料只复制一次，交给现有引擎冻结新段。旧格式续接仍用旧驱动，不能把新 discussion 权重默默套到旧段。
+- 非法 effort、权重、成员、重复参数、非安全整数、毫秒溢出或超出政策硬帽，在首次 active 恢复分支之前拒绝；返回 1、快照字节不变，而不是悄悄忽略参数并返回暂停。
+- setup/init 写 v2，默认 standard、两成员各自两种权重均为 1，轮数空输入表示不额外限制。双方可跳过密钥输入或使用既有环境；文件仍排他创建、目录 0700/文件 0600，密钥独立保存，已有文件不覆盖。进程环境优先于密钥文件。
+
+### 命令、结果与恢复
+
+所有 `cothink start/show/retry/continue/view/export` 都通过同一命令层处理；新 start 使用 DiscussionEngine。合法旧格式保持 FilePeerStore + 原驱动，合法新格式进入 FileDiscussionStore 的完整严格校验，不将路由头当作可执行状态。非法/混用版本在模型调用及 writer 修改前拒绝。
+
+- 正常共识、权重回退、偏好并列退出 0；未完成或没有新版最终结果退出 2；参数、配置、损坏格式和命令错误退出 1。共识/回退正文与保存答案版本相同；并列展示实际 alternatives 和各自限制，没有固定胜者或合成正文。
+- 新段未完成时输出一个安全的 incomplete FinalResult 投影，原因及恢复办法来自程序固定映射。不会把 pauseReason.message、provider error、原始响应、sealed 回应或旧段 FinalResult 冒充当前答案。已知约束失败保持未完成，并保留原宿主证据。
+- 旧会话不推断新版共识：公开结果标记 legacy peer 格式及 active/paused/completed 状态，answer 为空，提供 retry/continue/新 start 办法；读取、导出和旧段完成后仍为 incomplete/2。旧冻结请求、inputHash 和全部原始内部记录继续保存，恢复/续接仍走原协议。
+- 首次操作 active 会话只执行恢复，零模型调用；重复显式 retry 才补缺失成员。成功封存成员不重问，失败/unknown 占用保留。扩额参数为 `--extra-calls`、`--extra-output-tokens`、`--extend-seconds`，实际执行仍由阶段 4 账本及引擎验证。
+- stdout 只输出公开结果。`--json` 在六个会话命令中输出单个可解析 FinalResult 对象，没有内部进度或外层 wrapper。必要的中断/保存提示进入 stderr。setup/help/version 和明确调用的连接诊断是独立管理入口。
+- 文本/Markdown/HTML 显示状态语义、答案、必要限制、重要异议和真实备选，以及恢复所需 session/segment；没有 review hash、逐轮消息、完整评议、内部诊断或展开入口。JSON 完整保留 FinalResult 的来源字段，不带运行记录。
+- HTML 只含转义后的最终结果和静态样式，没有脚本、隐藏 DOM、内嵌讨论 JSON 或完整记录。渲染器拒绝额外、继承、非枚举或 getter 形式的诊断渠道；错误为固定安全提示。
+- show/view/export 不加载配置或密钥，不调用模型，显式传入不存在的 `--env-file` 也不访问它。export 支持 txt/md/json/html；view 生成同一最终结果 HTML，`--no-open` 不启动浏览器。导出文件保持 0600，私有临时文件后原子替换；拒绝会话/锁/默认配置/密钥目标及符号链接/硬链接，读取过程不会覆盖已保存会话。
+- 可执行入口使用 `env -S node --`，避免 Node 24 把应用 `--env-file` 提前处理。安装后的实际 `.bin/cothink` 已验证；直接用解释器运行文件时，应使用 `node -- FILE ...`。Windows npm shim 对这类 shebang 的解析仅检查了本机 npm 源码，尚未实机验证。
+
+### 本次实际验证
+
+环境：macOS、Node.js 24.19.0、npm 11.17.0。没有使用真实账户或模型 API。mock 和 loopback 响应将 `INTERNAL_DISCUSSION_SENTINEL` 只放在内部观点、依据、评议理由、evidenceRequests、provider reasoning/失败诊断或生成选项中，公开答案和异议使用独立文本。
+
+| 验收         | 实际证据                                                                                                                                                                                              |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 新版完整 CLI | 实际 loopback start 6 次共识，show/export 返回保存 FinalResult；config v2 和旧配置均进入新 discussion。                                                                                               |
+| 隐藏过程     | start/show/retry/continue/view/export 的 stdout/stderr，txt/json/md/html 导出和完整 HTML 源码均不含内部标记或 fake 密钥；内部 session.json 确实含标记，证明测试不是没有植入数据。                     |
+| 决策与异议   | 6 次到限分歧按较高决策权重采用最后有效答案；原作者重要异议保留。下一段权重并列时展示两个真实 alternatives，answer 为空。                                                                              |
+| 优先级与冻结 | 问题文件、上下文、effort/独立双权重/轮数覆盖逐项在保存政策中核对；继续切换 low→high 与决策偏好，旧段整体相等；原配置字节未改写。                                                                      |
+| 重试和恢复   | 模型失败先返回 incomplete/2，sealed 半批不提交；retry 只补缺失成员、旧 call/hash 相等。两格式 active 首次恢复零调用、零密钥读取，unknown 占用不退；原 legacy 驱动完成重试及续接，格式不迁移。         |
+| 读取与安全   | 缺失密钥文件及抛错的密钥 getter 不妨碍 show/export/view；快照字节不变且零调用。非法版本、引用/hash、权重、超限输入及恢复前非法参数拒绝；链接导出不能覆盖原快照。                                      |
+| 双凭据脱敏   | 实际 loopback 失败同时回显双方 fake 凭据与内部标记；公开结果无标记、无任一凭据，私有保存失败记录保留标记但双方凭据已脱敏。                                                                            |
+| 源码外安装   | 新鲜 tarball 无 `@onevcat/argue` 运行依赖，实际安装命令运行 help/version/init、4 次旧连接诊断、6 次新协议共识、6 次新段；四种导出及离线 view、缺失密钥文件的读取、stdout/stderr/HTML 源码检查均通过。 |
+
+最终重新构建后，`npm run check`、`npm run test`、`npm run lint`、`npm run format:check`、`npm run smoke:pack`、`npm run smoke:cothink` 全部退出 0。全仓 **1,164 项**：core 532、CLI 516、viewer 85、CoThink 31；相较阶段 4 新增 **98 项**。旧请求/哈希、旧协议/恢复/传输/存储及阶段 4 六处 SIGKILL、真实 SIGINT 回归也在本次全量中通过。
+
+配置、渲染、命令及最终接口组合分别经独立审查；当前无待处理问题。最终组合审查独立运行 **134 项** 定向测试，包含最新 active continue 上限校验和实际可执行入口，全部通过。全仓与安装成绩来自主任务上述当前运行，未冒称审查重复了全部测试。
+
+整合中的实际反例与修复：旧 completed continue 预检错误地请求“下一请求”，改为窄的 provider 配置检查；active continue 的非法参数被恢复快捷分支忽略，改为恢复前完整校验；硬链接导出目标会截断保存快照，改为链接拒绝和原子替换；安装测试发现 Node 提前读取应用 env-file，改为解释器参数边界。语义 RED/GREEN 与最初测试夹具/缺失导入的错误日志均保留，未以夹具错误代替拒绝规则的证据。
+
+工作目录内的 `before-runtime.log`、`build-final.log`、`check-final.log`、`test-final.log`、`lint-final.log`、`format-final.log`、`smoke-pack-final.log`、`smoke-cothink-final.log` 保存本次证据；config/render/commands/final review 报告及各反例日志也保留在仓库外的阶段 5 工作目录，没有加入源码或发布包。
+
+### Git 与尚未验证边界
+
+阶段 3–5 的增量继续未提交、未推送。PR/远端 CI 只覆盖阶段 0–2 的检查点，不能当作阶段 5 的 CI 验证；本次没有创建、合并或更新 PR。
+
+- 真实 DeepSeek/GLM 及其他 provider 的新版协议输出、费用、取消后的实际计费、协议有效率和模型质量尚未验证，留在阶段 6；明确调用的 test/doctor 仍为原有 bounded peer 连接诊断，并不是新版完整讨论校准。
+- 本次实际可执行入口、文件权限、磁盘/进程和 tarball 验证为 macOS/Node 24。阶段 5 没有运行 Node 22 或 Windows/Linux 实机；Windows shim、交互 TTY 的真实密钥输入、浏览器实际打开/视觉验收仍未验证。HTML 静态源码与转义已验证。
+- 三成员面向用户配置、交流语言实际替换、断电/磁盘故障、大型会话性能以及阶段 7 的完整文档/开源交付验收尚未完成。内部 roster 算法保留，没有引入两成员专用的核心讨论/决策算法。
+- 不新增施工同步、单 Agent 讨论或讨论浏览入口。既有 request-id 碰撞和依赖 advisory 保持此前边界。
+
+本次停止在阶段 5。下一阶段再按计划进行有硬上限的真实模型校准。
+
+## Git 上传检查点：阶段 0–5（2026-10-14）
+
+用户本次授权保存并上传当前开发成果。阶段 0–2 已在 `5286634` 检查点；本次纳入 37 个明确的源码、测试和交接文件，保存阶段 3–5 增量。各阶段末尾“未提交、未推送”描述的是当时的状态；本节随当前功能检查点保存。没有纳入本地配置、密钥、会话、依赖、构建产物或仓库外工作日志，版本和依赖保持不变。
+
+上传前重新运行 build/check/test/lint/format:check 与 smoke:pack/smoke:cothink，全部退出 0，测试 **1,164 项**（532/516/85/31）。没有以阶段 5 的历史日志代替本次检查；没有真实模型 API 调用。文件清单逐项暂存，不使用 `git add .`，推送目标仍为现有功能分支和 [草稿 PR #1](https://github.com/XSY-28/CoThink/pull/1)。
+
+推送 SHA 及 Node 22/24 的远端验收以该 PR 的当前 head 和对应 CI 检查为准；本地通过不能代替远端通过。此次只是 Git 检查点，不合并 main，不创建 npm/GitHub Release，也不进入阶段 6。

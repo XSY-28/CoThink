@@ -88,8 +88,8 @@ function initial(input: DiscussionSessionInput): DiscussionSession {
       contentHash: discussionSha256(source.content),
       lineCount: source.content.split("\n").length
     })),
-    segmentId: 1,
-    contextVersion: 1,
+    segmentId: input.segmentId ?? 1,
+    contextVersion: input.contextVersion ?? 1,
     phase: "opening",
     roundIndex: 0,
     committedSeq: 0,
@@ -474,6 +474,8 @@ export function parseDiscussionSession(raw: unknown): DiscussionSession {
   const parsed = DiscussionSessionSchema.parse(raw);
   let replay = initial({
     sessionId: parsed.sessionId,
+    segmentId: parsed.segmentId,
+    contextVersion: parsed.contextVersion,
     question: parsed.question,
     constraints: parsed.constraints,
     memberIds: parsed.memberIds,
