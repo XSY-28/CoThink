@@ -433,3 +433,11 @@ ConstraintCheck 是宿主单独输入 `{checkId, source: host, contextHash, answ
 上传前重新运行 build/check/test/lint/format:check 与 smoke:pack/smoke:cothink，全部退出 0，测试 **1,164 项**（532/516/85/31）。没有以阶段 5 的历史日志代替本次检查；没有真实模型 API 调用。文件清单逐项暂存，不使用 `git add .`，推送目标仍为现有功能分支和 [草稿 PR #1](https://github.com/XSY-28/CoThink/pull/1)。
 
 推送 SHA 及 Node 22/24 的远端验收以该 PR 的当前 head 和对应 CI 检查为准；本地通过不能代替远端通过。此次只是 Git 检查点，不合并 main，不创建 npm/GitHub Release，也不进入阶段 6。
+
+### 上传后的 CI 修正（2026-10-14）
+
+`f191e11` 已普通推送到功能分支，草稿 PR #1 的范围更新为阶段 0–5。首轮 [CI 38522956464](https://github.com/XSY-28/CoThink/actions/runs/38522956464) 的 Node 22 上全部 **1,164 项断言通过**，但 core 的 Vitest worker 报 `Timeout calling onTaskUpdate`，整次作业仍失败；Node 24 被矩阵 fail-fast 取消，安装检查未执行。因此不能把该轮标成 CI 通过。
+
+从日志及 Vitest 本地实现确认 RPC 默认超时 60 秒，内存存储替身的连续纯重放在该 CI 机器上使整个 engine 测试文件占用约 81 秒，只让出微任务，通信回调无法及时处理。新增“提交之间监督事件循环可以推进”回归，修正前定时回调只能在 6 次调用全部结束后触发，语义断言失败。测试替身现在在提交后显式让出事件循环，模拟真实磁盘 I/O 的调度；fake clock 的硬调用计时断言保留。没有调整业务引擎、预算、停止规则、测试断言或 RPC 超时，也没有忽略未处理错误。后续远端成绩以本修正提交的 Node 22/24 检查为准。
+
+修正后本地全量 **1,165 项**（core 533、CLI 516、viewer 85、CoThink 31）、check/lint/format:check 通过。独立审查 5 项调度、硬截止、CAS 与新段回归通过；本修补只涉及测试替身及本记录。

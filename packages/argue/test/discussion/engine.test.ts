@@ -1,3 +1,4 @@
+import { setImmediate as yieldToEventLoop } from "node:timers/promises";
 import { describe, expect, it, vi } from "vitest";
 import {
   DiscussionEngine,
@@ -43,6 +44,8 @@ class MemoryStore implements DiscussionRunStore {
     if (revision !== (this.state?.revision ?? -1) || this.fail?.(next)) throw new Error("CAS conflict");
     validateDiscussionRunTransition(next, this.state);
     this.state = parseDiscussionRun(JSON.parse(JSON.stringify(next)));
+    // Disk commits yield to I/O; this simulator must also service worker RPC.
+    await yieldToEventLoop();
   }
 }
 function harness(options: DiscussionEngineOptions = {}, policy?: unknown) {
@@ -103,6 +106,18 @@ function harness(options: DiscussionEngineOptions = {}, policy?: unknown) {
   };
 }
 describe("DiscussionEngine offline scheduling", () => {
+  it("allows the supervisor event loop to progress between durable commits", async () => {
+    const h = harness();
+    let callsAtSupervisorTick = -1;
+    const supervisor = yieldToEventLoop().then(() => {
+      callsAtSupervisorTick = h.calls.length;
+    });
+    const result = await h.engine.start(h.input);
+    await supervisor;
+    expect(result.status).toBe("completed");
+    expect(h.calls).toHaveLength(6);
+    expect(callsAtSupervisorTick).toBeLessThan(6);
+  });
   it("first checkpoint consensus dispatches exactly six frozen calls and restarts return the same result", async () => {
     const h = harness();
     const run = await h.engine.start(h.input),
@@ -462,7 +477,7 @@ describe("DiscussionEngine offline scheduling", () => {
       const h = harness({ now: () => Date.now() }, { effort: "standard", callTimeoutMs: 100, maxDurationMs: 1000 });
       h.behave(() => new Promise(() => {}));
       const running = h.engine.start(h.input);
-      for (let i = 0; i < 100 && h.calls.length < 2; i++) await Promise.resolve();
+      for (let i = 0; i < 100 && h.calls.length < 2; i++) await yieldToEventLoop();
       expect(h.calls).toHaveLength(2);
       await vi.advanceTimersByTimeAsync(100);
       const result = await running,
