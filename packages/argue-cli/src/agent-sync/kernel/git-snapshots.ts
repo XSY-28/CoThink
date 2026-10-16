@@ -298,13 +298,21 @@ export class ManifestGitSnapshots {
     }
     const walk = async (directory: string): Promise<void> => {
       await this.assertOwner();
-      for (const name of await readdir(directory)) {
-        await this.assertOwner();
-        const path = join(directory, name);
-        const child = await lstat(path);
-        if (child.isSymbolicLink() || (!child.isDirectory() && (!child.isFile() || child.nlink !== 1)))
-          throw new Error("BUILD_GIT_UNSAFE_FILE");
-        if (child.isDirectory()) await walk(path);
+      const names = await readdir(directory);
+      // Keep every live-owner and entry check, but overlap independent sibling I/O.
+      // Each batch must finish before Git can observe the validated repository.
+      for (let offset = 0; offset < names.length; offset += 4) {
+        const checked = await Promise.allSettled(
+          names.slice(offset, offset + 4).map(async (name) => {
+            await this.assertOwner();
+            const path = join(directory, name);
+            const child = await lstat(path);
+            if (child.isSymbolicLink() || (!child.isDirectory() && (!child.isFile() || child.nlink !== 1)))
+              throw new Error("BUILD_GIT_UNSAFE_FILE");
+            if (child.isDirectory()) await walk(path);
+          })
+        );
+        for (const result of checked) if (result.status === "rejected") throw result.reason;
       }
     };
     await walk(this.repo);
