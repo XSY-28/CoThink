@@ -38,6 +38,8 @@ Building needs Docker Hub/npm registry access and a trusted pinned base; the old
 
 Other callers can start `node /checkout/tools/agent-sync/dist/stdio.mjs --config /absolute/job.json` and use `tools/agent-sync/client.mjs`. Cancellation explicitly revokes authority; close drains and releases the writer; reopening/recovery never automatically replays unknown actions. A cancellation ACK does not prove an external process stopped. The [complete quickstart](docs/agent-sync/QUICKSTART.md) explains inputs, output/error interpretation, preparation, cancel/recovery and boundaries. See [PROTOCOL](docs/agent-sync/PROTOCOL.md), [USAGE](docs/agent-sync/USAGE.md), and [VALIDATION](docs/agent-sync/VALIDATION.md). This is deterministic tool validation, not evidence of multi-model benefits.
 
+CoThink can now call the tool through `cothink build sync start|show|cancel|recover|resume|export`, using existing model profiles and a frozen trusted job. See the [CoThink integration guide](docs/cothink/AGENT_SYNC.md) for explicit plan approval, worker mapping, shared budgets, recovery and the installed-tarball integration smoke.
+
 ## CoThink requirements and installation
 
 Use Node.js 22 or newer and npm. You need API access for two configured members, which can use OpenAI-compatible or native Anthropic-compatible endpoints. Model availability and API usage charges depend on your provider.

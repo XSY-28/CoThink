@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import type { MemberId, MemberRuntime, ModelTransport } from "@onevcat/argue";
 import metadata from "../package.json" with { type: "json" };
 import { runDiscussionCommand } from "../../argue-cli/src/discussion/commands.js";
+import { runSyncCommand } from "./agent-sync/commands.js";
 import { runBuildCommand } from "../../argue-cli/src/build/commands.js";
 import { loadDiscussionConfig } from "../../argue-cli/src/discussion/config.js";
 import { testPeerConnections } from "../../argue-cli/src/peer/diagnostics.js";
@@ -24,6 +25,9 @@ function help(io: Io) {
   io.log("Usage: cothink setup | init | test | start | show | retry | continue | export | view");
   io.log(
     "  build start|show|retry|cancel|export  Local construction; use cothink build help for explicit plan approval."
+  );
+  io.log(
+    "  build sync start|show|cancel|recover|resume|export  Use an external agent-sync tool; build sync help for inputs."
   );
   io.log("  setup [--config FILE] [--env-file FILE] [--no-input]  Configure two members; optional keys are masked.");
   io.log(
@@ -103,6 +107,8 @@ export async function runCoThink(
       return { ok: true, code: 0 };
     }
     const base = dependencies.env ?? process.env;
+    if (command === "build" && rest[0] === "sync")
+      return runSyncCommand(rest.slice(1), io, { env: base, transport: dependencies.transport });
     if (command === "build")
       return runBuildCommand(rest, io, {
         env: base,
