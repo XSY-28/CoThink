@@ -7,6 +7,9 @@
     "types": ["node"],
     "baseUrl": ".",
     "paths": {
+      "@onevcat/argue/agent-sync/project": ["../argue/dist/agent-sync/project/index.d.ts"],
+      "@onevcat/argue/agent-sync/legacy-v1": ["../argue/dist/agent-sync/legacy-v1/index.d.ts"],
+      "@onevcat/argue/agent-sync": ["../argue/dist/agent-sync/index.d.ts"],
       "@onevcat/argue": ["../argue/dist/index.d.ts"]
     }
   },

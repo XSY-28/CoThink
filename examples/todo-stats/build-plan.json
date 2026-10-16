@@ -1,0 +1,155 @@
+{
+  "buildSchemaVersion": 1,
+  "planVersion": "build-plan-v1",
+  "actionVersion": "build-action-v1",
+  "checkVersion": "build-check-v1",
+  "publishVersion": "build-publish-v1",
+  "resultVersion": "build-result-v1",
+  "projectKey": "todo-stats",
+  "memberIds": ["member-a", "member-b"],
+  "manifest": [
+    {
+      "path": "SPEC.md",
+      "access": "read-only",
+      "contentHash": "sha256:522af95a6fd75c255b98a65d95b28ceb2108bb4f29fad6faaf24d7cba5f96c17"
+    },
+    {
+      "path": "package.json",
+      "access": "read-only",
+      "contentHash": "sha256:41108924664e83e90df98781e28662d27fd6bb670e5190b4424757fbe5b352a7"
+    },
+    {
+      "path": "tsconfig.json",
+      "access": "read-only",
+      "contentHash": "sha256:0b382948408080bbff6b2c36bf2393810fb5974404ef5f3c0e9b140f97dc3472"
+    },
+    {
+      "path": "src/types.ts",
+      "access": "read-only",
+      "contentHash": "sha256:d1cd1e88cc7ccc83f3296023947a53425d4260a6d59e5211749e338a0e148280"
+    },
+    {
+      "path": "src/cli.ts",
+      "access": "read-only",
+      "contentHash": "sha256:6b0f7f778b18ce186543b451a1937bd20be688e4fd7a60927fe344da593a10d9"
+    },
+    {
+      "path": "src/normalize.ts",
+      "access": "writable",
+      "contentHash": "sha256:ba3e64a8eeeaf47842c423a484eeff8819281c678936e2f69dfb79264fb5a2b7"
+    },
+    {
+      "path": "src/report.ts",
+      "access": "writable",
+      "contentHash": "sha256:a32303348f54554a62f3591497bd9223a5b91e28180b35e2bcdf9dc299885d62"
+    },
+    {
+      "path": "fixtures/legacy.json",
+      "access": "read-only",
+      "contentHash": "sha256:6bfac948f80375f3f88cb7d72bc548814fcfc5122f032a181d33f06dd033c013"
+    },
+    {
+      "path": "fixtures/mixed.json",
+      "access": "read-only",
+      "contentHash": "sha256:c7282fca482f96de3d34829fd9371304d79859f1eed4e7984f6a53dd070039c8"
+    },
+    {
+      "path": "fixtures/normalized.json",
+      "access": "read-only",
+      "contentHash": "sha256:1dc0e46af21e7be9bea5f3f4feb3cbc49e887b1d46570a2f8dc782ef1ee1c19b"
+    },
+    {
+      "path": "fixtures/invalid.json",
+      "access": "read-only",
+      "contentHash": "sha256:57259c5890cb8c00c3d4e9688250fb71dde0de2ef68733398b1b8dd351db7bd6"
+    }
+  ],
+  "tasks": [
+    {
+      "taskId": "T-A",
+      "workerId": "member-a",
+      "scope": {
+        "read": [
+          "SPEC.md",
+          "fixtures/legacy.json",
+          "fixtures/mixed.json",
+          "package.json",
+          "src/cli.ts",
+          "src/types.ts",
+          "tsconfig.json"
+        ],
+        "write": ["src/normalize.ts"]
+      },
+      "dependsOn": [],
+      "checkProfileId": "state-format"
+    },
+    {
+      "taskId": "T-B1",
+      "workerId": "member-b",
+      "scope": {
+        "read": ["SPEC.md", "fixtures/normalized.json", "package.json", "src/cli.ts", "src/types.ts", "tsconfig.json"],
+        "write": ["src/report.ts"]
+      },
+      "dependsOn": [],
+      "checkProfileId": "report"
+    },
+    {
+      "taskId": "T-B2",
+      "workerId": "member-b",
+      "scope": {
+        "read": [
+          "SPEC.md",
+          "fixtures/invalid.json",
+          "fixtures/legacy.json",
+          "fixtures/mixed.json",
+          "package.json",
+          "src/cli.ts",
+          "src/types.ts",
+          "tsconfig.json"
+        ],
+        "write": ["src/normalize.ts"]
+      },
+      "dependsOn": [],
+      "checkProfileId": "identity"
+    }
+  ],
+  "profiles": [
+    {
+      "profileId": "common",
+      "groups": ["common"],
+      "checksHash": "sha256:dde977dd2e5582aa69c6a8cdfeff1e851b48fd1294ec8370f513c160e872653b"
+    },
+    {
+      "profileId": "state-format",
+      "groups": ["common", "state-format"],
+      "checksHash": "sha256:511bdf2cbcddf5e0baed34e3eb24e9111214ac3d314608e92705a63e309b3300"
+    },
+    {
+      "profileId": "report",
+      "groups": ["common", "report"],
+      "checksHash": "sha256:233f1620abd9df846b69eed31c3fa2845b337020bfa6b4a821743371c038c9f1"
+    },
+    {
+      "profileId": "identity",
+      "groups": ["common", "identity"],
+      "checksHash": "sha256:b5bffafe07685829bed86b34522422d3388253330e4da035e6431884ad137ba9"
+    },
+    {
+      "profileId": "final",
+      "groups": ["common", "state-format", "report", "identity", "final"],
+      "checksHash": "sha256:ef3ae41199fe554d2ad88b035021e500f8fdbf4ae381b9faae3442c25e98ddd0"
+    }
+  ],
+  "budget": {
+    "budgetVersion": "build-budget-v1",
+    "maxCallsPerTask": 12,
+    "maxOutputTokensPerCall": 4096,
+    "maxAllocatedOutputTokensPerTask": 49152,
+    "maxCalls": 36,
+    "maxAllocatedOutputTokens": 147456,
+    "callTimeoutMs": 120000,
+    "taskTimeoutMs": 900000,
+    "runTimeoutMs": 2700000
+  },
+  "planHash": "sha256:744be9849b56e2cfc59e93ace9d2e8f5c8b6e51b27efc60694f2c5e125bf270d"
+}

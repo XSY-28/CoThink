@@ -1,0 +1,22 @@
+# Build from a source checkout; no locally built donor image is required.
+# NODE_BASE_IMAGE must be a trusted public digest, not a mutable tag.
+ARG NODE_BASE_IMAGE
+FROM ${NODE_BASE_IMAGE} AS assembly
+ARG NODE_BASE_IMAGE
+ARG EXPECTED_NODE_VERSION
+RUN node -e 'if (!/^.+@sha256:[a-f0-9]{64}$/.test(process.env.NODE_BASE_IMAGE || "") || Number(process.versions.node.split(".")[0]) < 22 || process.versions.node !== process.env.EXPECTED_NODE_VERSION) process.exit(1)'
+WORKDIR /opt/toolchain
+COPY package.json package-lock.json ./
+COPY packages/argue/package.json ./packages/argue/package.json
+COPY packages/argue-cli/package.json ./packages/argue-cli/package.json
+COPY packages/argue-viewer/package.json ./packages/argue-viewer/package.json
+COPY packages/cothink/package.json ./packages/cothink/package.json
+RUN npm ci --ignore-scripts --no-audit --no-fund && rm -rf /root/.npm
+COPY tools/agent-sync-validator/*.mjs /opt/validator/
+RUN chmod -R a+rX /opt/toolchain /opt/validator
+FROM scratch
+COPY --from=assembly / /
+ENV PATH=/usr/local/bin:/usr/bin:/bin HOME=/tmp LANG=C.UTF-8
+USER 65532:65532
+ENTRYPOINT ["node"]
+CMD ["/opt/validator/supervisor.mjs"]

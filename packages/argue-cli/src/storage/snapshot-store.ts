@@ -18,6 +18,8 @@ export interface SnapshotCodec<State> {
 }
 
 export interface SnapshotWriter<State> {
+  /** Verify the current disk lease without reading or parsing domain state. */
+  assertOwner(): Promise<void>;
   load(sessionId: string): Promise<State>;
   commit(expectedRevision: number, state: State): Promise<void>;
 }
@@ -254,6 +256,7 @@ export class FileSnapshotStore<State> {
       return result;
     };
     const store: SnapshotWriter<State> = {
+      assertOwner: () => serialize(ensureLease),
       load: (requestedId) =>
         serialize(async () => {
           if (requestedId !== sessionId) throw new Error(`Writer lease belongs to another ${formatName} session`);

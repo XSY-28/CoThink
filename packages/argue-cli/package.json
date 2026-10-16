@@ -9,6 +9,18 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./agent-sync": {
+      "types": "./dist/agent-sync/index.d.ts",
+      "import": "./dist/agent-sync/index.js"
+    },
+    "./agent-sync/project": {
+      "types": "./dist/agent-sync/project/index.d.ts",
+      "import": "./dist/agent-sync/project/index.js"
+    },
+    "./agent-sync/legacy-v1": {
+      "types": "./dist/agent-sync/legacy-v1/index.d.ts",
+      "import": "./dist/agent-sync/legacy-v1/index.js"
     }
   },
   "bin": {

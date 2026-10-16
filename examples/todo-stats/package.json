@@ -1,0 +1,9 @@
+{
+  "name": "cothink-todo-stats-sample",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "description": "Frozen V0 input for the construction MVP; not a workspace or agent result."
+}

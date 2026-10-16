@@ -64,6 +64,40 @@ function storageContract<State>(
       expect(await store.load(sessionId)).toEqual(initial);
     });
 
+    it("checks live ownership without parsing state and rejects a replaced or ended lease", async () => {
+      let parses = 0;
+      const store = new FileSnapshotStore(root, {
+        ...codec,
+        parse(value: unknown) {
+          parses++;
+          return codec.parse(value);
+        }
+      });
+      await create(store);
+      let escaped: SnapshotWriter<State> | undefined;
+      await store.withWriter(sessionId, async (writer) => {
+        escaped = writer;
+        parses = 0;
+        await writer.assertOwner();
+        await writer.assertOwner();
+        expect(parses).toBe(0);
+        const lockPath = join(root, sessionId, ".writer.lock");
+        const originalLock = await readFile(lockPath, "utf8");
+        try {
+          await writeFile(
+            lockPath,
+            JSON.stringify({ pid: process.pid, nonce: "00000000-0000-0000-0000-000000000000" })
+          );
+          await expect(writer.assertOwner()).rejects.toThrow(/lease was lost/);
+        } finally {
+          await writeFile(lockPath, originalLock);
+        }
+        expect(await writer.load(sessionId)).toEqual(initial);
+        expect(parses).toBeGreaterThan(0);
+      });
+      await expect(escaped!.assertOwner()).rejects.toThrow(/lease has ended/);
+    });
+
     it("rejects a live contender and denies an escaped writer after its lease ends", async () => {
       const store = new FileSnapshotStore(root, codec);
       await create(store);

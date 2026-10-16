@@ -1,0 +1,15 @@
+**
+!package.json
+!package-lock.json
+!packages/
+!packages/argue/
+!packages/argue/package.json
+!packages/argue-cli/
+!packages/argue-cli/package.json
+!packages/argue-viewer/
+!packages/argue-viewer/package.json
+!packages/cothink/
+!packages/cothink/package.json
+!tools/
+!tools/agent-sync-validator/
+!tools/agent-sync-validator/*.mjs

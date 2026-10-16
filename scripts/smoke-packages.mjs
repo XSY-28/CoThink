@@ -11,6 +11,13 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
 const libraryDir = join(repoRoot, "packages", "argue");
 const cliDir = join(repoRoot, "packages", "argue-cli");
+const neutralCoreAssertions = [
+  "const core = await import('@onevcat/argue/agent-sync');",
+  "if (core.BuildPathSchema.parse('src/value.ts') !== 'src/value.ts') throw new Error('neutral schema unusable');",
+  "if (typeof core.createBuildState !== 'function' || typeof core.parseBuildState !== 'function' || typeof core.reserveBuildScope !== 'function') throw new Error('neutral state primitives missing');",
+  "if (typeof core.AgentSyncService !== 'function') throw new Error('AgentSyncService export missing');",
+  "if (core.BuildDriver !== undefined) throw new Error('neutral entry exposes model driver');"
+];
 
 await smokeLibrary();
 await smokeCli();
@@ -30,7 +37,8 @@ async function smokeLibrary() {
         [
           "const mod = await import('@onevcat/argue');",
           "if (typeof mod.ArgueEngine !== 'function') throw new Error('ArgueEngine export missing');",
-          "if (typeof mod.MemorySessionStore !== 'function') throw new Error('MemorySessionStore export missing');"
+          "if (typeof mod.MemorySessionStore !== 'function') throw new Error('MemorySessionStore export missing');",
+          ...neutralCoreAssertions
         ].join(" ")
       ],
       sandbox
@@ -49,6 +57,20 @@ async function smokeCli() {
   try {
     await run("npm", ["init", "-y"], sandbox);
     await run("npm", ["install", libraryTarball, cliTarball], sandbox);
+    await run(
+      "node",
+      [
+        "--input-type=module",
+        "-e",
+        [
+          ...neutralCoreAssertions,
+          "const host = await import('@onevcat/argue-cli/agent-sync');",
+          "if (typeof host.LocalAgentSync !== 'function' || typeof host.initializeAgentSyncProject !== 'function') throw new Error('neutral local host missing');",
+          "for (const name of ['FileBuildStore', 'Workspace', 'DockerVerifier', 'Publisher', 'recoverBuild', 'exportAcceptedVersion']) if (typeof host[name] !== 'function') throw new Error('neutral backend missing: ' + name);"
+        ].join(" ")
+      ],
+      sandbox
+    );
     const binPath = join(sandbox, "node_modules", ".bin", "argue");
     const { stdout } = await execFileAsync(binPath, ["--version"], { cwd: sandbox });
     if (!stdout.includes("@onevcat/argue-cli v")) {

@@ -1,0 +1,106 @@
+{
+  "manifestVersion": "todo-stats-manifest-v1",
+  "files": [
+    {
+      "path": "SPEC.md",
+      "access": "read-only",
+      "contentHash": "sha256:522af95a6fd75c255b98a65d95b28ceb2108bb4f29fad6faaf24d7cba5f96c17"
+    },
+    {
+      "path": "package.json",
+      "access": "read-only",
+      "contentHash": "sha256:41108924664e83e90df98781e28662d27fd6bb670e5190b4424757fbe5b352a7"
+    },
+    {
+      "path": "tsconfig.json",
+      "access": "read-only",
+      "contentHash": "sha256:0b382948408080bbff6b2c36bf2393810fb5974404ef5f3c0e9b140f97dc3472"
+    },
+    {
+      "path": "src/types.ts",
+      "access": "read-only",
+      "contentHash": "sha256:d1cd1e88cc7ccc83f3296023947a53425d4260a6d59e5211749e338a0e148280"
+    },
+    {
+      "path": "src/cli.ts",
+      "access": "read-only",
+      "contentHash": "sha256:6b0f7f778b18ce186543b451a1937bd20be688e4fd7a60927fe344da593a10d9"
+    },
+    {
+      "path": "src/normalize.ts",
+      "access": "writable",
+      "contentHash": "sha256:ba3e64a8eeeaf47842c423a484eeff8819281c678936e2f69dfb79264fb5a2b7"
+    },
+    {
+      "path": "src/report.ts",
+      "access": "writable",
+      "contentHash": "sha256:a32303348f54554a62f3591497bd9223a5b91e28180b35e2bcdf9dc299885d62"
+    },
+    {
+      "path": "fixtures/legacy.json",
+      "access": "read-only",
+      "contentHash": "sha256:6bfac948f80375f3f88cb7d72bc548814fcfc5122f032a181d33f06dd033c013"
+    },
+    {
+      "path": "fixtures/mixed.json",
+      "access": "read-only",
+      "contentHash": "sha256:c7282fca482f96de3d34829fd9371304d79859f1eed4e7984f6a53dd070039c8"
+    },
+    {
+      "path": "fixtures/normalized.json",
+      "access": "read-only",
+      "contentHash": "sha256:1dc0e46af21e7be9bea5f3f4feb3cbc49e887b1d46570a2f8dc782ef1ee1c19b"
+    },
+    {
+      "path": "fixtures/invalid.json",
+      "access": "read-only",
+      "contentHash": "sha256:57259c5890cb8c00c3d4e9688250fb71dde0de2ef68733398b1b8dd351db7bd6"
+    }
+  ],
+  "hostOnly": [
+    {
+      "path": "vitest.config.mjs",
+      "contentHash": "sha256:78fb0043a5a68cd892d0c2f52165edcdbae02bc05c45471f659dad3cf46a9bb1"
+    },
+    {
+      "path": "test/baseline.test.ts",
+      "contentHash": "sha256:f53916485a703c1bc00c4efcaaa80f280c92e788d846e9641cdbbacf1b36a465"
+    },
+    {
+      "path": "test/final.test.ts",
+      "contentHash": "sha256:21c6d6934e871e731cf9f6737fce77b85d7ee6096b4bbbf3fe54970bf09b6e44"
+    },
+    {
+      "path": "test/harness.ts",
+      "contentHash": "sha256:73932c2fca14320421db968fbaac4a855213112b9567c1d7fd85aee09e52f51f"
+    },
+    {
+      "path": "test/identity.test.ts",
+      "contentHash": "sha256:34ebbe33a0e5e8e7be6bf99982c73b6dfae9fcd43b8fdcfa4139ed2f9125cc62"
+    },
+    {
+      "path": "test/oracle/README.md",
+      "contentHash": "sha256:fcab5f180b8d6d8d53a9ecb97274904803c766ae7b5ea3f0301c481ce165663c"
+    },
+    {
+      "path": "test/oracle/correct-final.ts",
+      "contentHash": "sha256:84b3724623c7ac811cea1a784f456f06b40f29938d4aa76148d53466b0f42c34"
+    },
+    {
+      "path": "test/oracle/correct-report.ts",
+      "contentHash": "sha256:7de30205c53419021702c977df4f1718f2f7bf99e9f424ed49d2aefa6d7609a6"
+    },
+    {
+      "path": "test/oracle/correct-state.ts",
+      "contentHash": "sha256:e8e1dbd896f8b1175f58334a627fcb568b1e358c44bb620fe77efb6e138a223b"
+    },
+    {
+      "path": "test/report.test.ts",
+      "contentHash": "sha256:bc28ab6ce2ee30d03f32b388465eae59bd0faf5dbd9e085b06527633a6ab6a1b"
+    },
+    {
+      "path": "test/state-format.test.ts",
+      "contentHash": "sha256:ec799e9bfde9699e137bc22bfce7ea5edae2719e8d5dbf19250ef0928b35bfb5"
+    }
+  ]
+}

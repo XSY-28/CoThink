@@ -1,0 +1,508 @@
+[
+  {
+    "result": {
+      "kind": "granted",
+      "lease": {
+        "attemptId": "T-A-1",
+        "taskId": "T-A",
+        "workerId": "member-a",
+        "ownerEpoch": 1,
+        "leaseEpoch": 1,
+        "token": "token-T-A-1"
+      }
+    },
+    "serializedHash": "sha256:261d5b3ccf5c109415bcd2ece82690fbdecd375d78813a05e13eb95f1e75a753",
+    "canonicalHash": "sha256:61875c85a64cf231ca4dea2dad572eac4083ff40e5b61f4559896a24be054763",
+    "revision": 1,
+    "requestHashes": ["sha256:b3e6fed61b6354565b87ba4c2b2ab993462e492a0f59af5e1910cb0aead96cf9"]
+  },
+  {
+    "result": {
+      "kind": "bound",
+      "attemptId": "T-A-1"
+    },
+    "serializedHash": "sha256:32360c533a7774bbb44e2ae177cca522d8e1adadabc2a5d8328e9b1fedc2bd1b",
+    "canonicalHash": "sha256:845e364fba4884c61906fa93188ac1cd85e71f6c2b47f15ffd945e9c877c200f",
+    "revision": 2,
+    "requestHashes": [
+      "sha256:b3e6fed61b6354565b87ba4c2b2ab993462e492a0f59af5e1910cb0aead96cf9",
+      "sha256:1ffe7403e9f37e834a5f39d7d904620dfd5ec5a611b2183f18980e07b495fcd3"
+    ]
+  },
+  {
+    "result": {
+      "kind": "ready",
+      "requestId": "action"
+    },
+    "serializedHash": "sha256:ce43d3d77c68bcbebb6aace95197e988ac987492ed1e588bcd876c4ab0088bf7",
+    "canonicalHash": "sha256:911497e6bf2c599ecfafa035432733bd66c4c6f45152848d5630a8613c88cf93",
+    "revision": 3,
+    "requestHashes": [
+      "sha256:b3e6fed61b6354565b87ba4c2b2ab993462e492a0f59af5e1910cb0aead96cf9",
+      "sha256:1ffe7403e9f37e834a5f39d7d904620dfd5ec5a611b2183f18980e07b495fcd3",
+      "sha256:327ba997195a46794294cc9082277d23f6ca9f37c5caec91a99881e76a448f2f"
+    ]
+  },
+  {
+    "result": {
+      "kind": "settled",
+      "receipt": {
+        "requestId": "action",
+        "attemptId": "T-A-1",
+        "inputHash": "sha256:48aed2374cea5f3bbbee1c8742439be758dcc1e999e0e3f0e03c1ee80e3565a0",
+        "payloadHash": "sha256:dcad6d82f4fbc1a719e1eae989b0348592309bb2fada15b9052ba640ff2ca73d",
+        "kind": "inspect",
+        "status": "succeeded",
+        "outputHash": "sha256:4bbb1f9446ff0829909d2fa9e71d95f6c7df7e30ac16ddf96e9a6b429d6b3ebf"
+      }
+    },
+    "serializedHash": "sha256:79836b2246cbda800e95aa470f631b076f297f38aa0ce507ca3a8dd671e1808a",
+    "canonicalHash": "sha256:a279ff6f422d8e63c4075dc79eb97069950dd91fad3e7d1a6fb867dd45d1cff4",
+    "revision": 4,
+    "requestHashes": [
+      "sha256:b3e6fed61b6354565b87ba4c2b2ab993462e492a0f59af5e1910cb0aead96cf9",
+      "sha256:1ffe7403e9f37e834a5f39d7d904620dfd5ec5a611b2183f18980e07b495fcd3",
+      "sha256:327ba997195a46794294cc9082277d23f6ca9f37c5caec91a99881e76a448f2f"
+    ]
+  },
+  {
+    "result": {
+      "kind": "waiting",
+      "taskId": "T-B2",
+      "reasons": [
+        {
+          "kind": "lock",
+          "paths": ["src/normalize.ts"],
+          "attemptIds": ["T-A-1"]
+        }
+      ]
+    },
+    "serializedHash": "sha256:ae27f6d4b2c339d4b40f0aad62f5d740dc44d3e76112a9a8d2b51116dfddf798",
+    "canonicalHash": "sha256:f19cac1921e86d803129378fbf20ed878ca926dd9f2fb686cf0a823e5fc0411d",
+    "revision": 5,
+    "requestHashes": [
+      "sha256:b3e6fed61b6354565b87ba4c2b2ab993462e492a0f59af5e1910cb0aead96cf9",
+      "sha256:1ffe7403e9f37e834a5f39d7d904620dfd5ec5a611b2183f18980e07b495fcd3",
+      "sha256:327ba997195a46794294cc9082277d23f6ca9f37c5caec91a99881e76a448f2f",
+      "sha256:65dd7a548c87c3e4454a1a2cebd00a9f4a9e1ce805d998baa0edd2cf18fa7bd1"
+    ]
+  },
+  {
+    "result": {
+      "kind": "released",
+      "attemptId": "T-A-1"
+    },
+    "serializedHash": "sha256:ca9f38c1d09e9e949b198c5db9b8edb38eb0bd9121c9ad25c6e691fb5b34f422",
+    "canonicalHash": "sha256:44f418192875e91f8d996729bde84b3bd6326bc455e09c806ff48fddbbc1d3c6",
+    "revision": 6,
+    "requestHashes": [
+      "sha256:b3e6fed61b6354565b87ba4c2b2ab993462e492a0f59af5e1910cb0aead96cf9",
+      "sha256:1ffe7403e9f37e834a5f39d7d904620dfd5ec5a611b2183f18980e07b495fcd3",
+      "sha256:327ba997195a46794294cc9082277d23f6ca9f37c5caec91a99881e76a448f2f",
+      "sha256:65dd7a548c87c3e4454a1a2cebd00a9f4a9e1ce805d998baa0edd2cf18fa7bd1",
+      "sha256:302c814c5bec75ed0658ea50a7a1b8e14ff5288667499bee3bff6e477529bf64"
+    ]
+  },
+  {
+    "scheduled": {
+      "state": {
+        "buildSchemaVersion": 1,
+        "planVersion": "build-plan-v1",
+        "actionVersion": "build-action-v1",
+        "checkVersion": "build-check-v1",
+        "publishVersion": "build-publish-v1",
+        "resultVersion": "build-result-v1",
+        "budgetVersion": "build-budget-v1",
+        "projectKey": "todo-stats",
+        "runId": "run-1",
+        "revision": 7,
+        "ownerEpoch": 1,
+        "plan": {
+          "buildSchemaVersion": 1,
+          "planVersion": "build-plan-v1",
+          "actionVersion": "build-action-v1",
+          "checkVersion": "build-check-v1",
+          "publishVersion": "build-publish-v1",
+          "resultVersion": "build-result-v1",
+          "projectKey": "todo-stats",
+          "memberIds": ["member-a", "member-b"],
+          "manifest": [
+            {
+              "path": "SPEC.md",
+              "access": "read-only",
+              "contentHash": "sha256:d4f02eaafd1a9e9de7d10972ca8e47fa7a985825c3c9c1e249c72683cb3e4f19"
+            },
+            {
+              "path": "src/normalize.ts",
+              "access": "writable",
+              "contentHash": "sha256:0270da4daac514f30bece5788a87ad7b800f59476d0d7e6f70d4b61fbc4f5e9e"
+            },
+            {
+              "path": "src/report.ts",
+              "access": "writable",
+              "contentHash": "sha256:11239872d178729acc9e5aeaf7fc001a0ffd878c922330be43712b9b3be043a7"
+            }
+          ],
+          "tasks": [
+            {
+              "taskId": "T-A",
+              "workerId": "member-a",
+              "scope": {
+                "read": ["SPEC.md"],
+                "write": ["src/normalize.ts"]
+              },
+              "dependsOn": [],
+              "checkProfileId": "state-format"
+            },
+            {
+              "taskId": "T-B1",
+              "workerId": "member-b",
+              "scope": {
+                "read": ["SPEC.md"],
+                "write": ["src/report.ts"]
+              },
+              "dependsOn": [],
+              "checkProfileId": "report"
+            },
+            {
+              "taskId": "T-B2",
+              "workerId": "member-b",
+              "scope": {
+                "read": ["SPEC.md"],
+                "write": ["src/normalize.ts"]
+              },
+              "dependsOn": [],
+              "checkProfileId": "identity"
+            }
+          ],
+          "profiles": [
+            {
+              "profileId": "common",
+              "groups": ["common"],
+              "checksHash": "sha256:92a5dc04bd6f9fb8f29f8066fed8a5c1e81bc59ad48a11283b63736867e4f2a8"
+            },
+            {
+              "profileId": "state-format",
+              "groups": ["common", "state-format"],
+              "checksHash": "sha256:4ba69735ca53765ed6a709edb56c6ea236b7193a3b29a6b390c346f0f4340e4e"
+            },
+            {
+              "profileId": "report",
+              "groups": ["common", "report"],
+              "checksHash": "sha256:845e91831319e89c4d656bdb80c278ac09a7230d61e5dfd2e1b1fbb436ac8917"
+            },
+            {
+              "profileId": "identity",
+              "groups": ["common", "identity"],
+              "checksHash": "sha256:689f6a627384c7dcb2dcc1487e540223e77bdf9dcd0d8be8a326eda65b0ce9a4"
+            },
+            {
+              "profileId": "final",
+              "groups": ["common", "state-format", "report", "identity", "final"],
+              "checksHash": "sha256:2443630b4620165c8b173e7265e17526fe2787ae594364dd6d839ad58f2fc007"
+            }
+          ],
+          "budget": {
+            "budgetVersion": "build-budget-v1",
+            "maxCallsPerTask": 12,
+            "maxOutputTokensPerCall": 4096,
+            "maxAllocatedOutputTokensPerTask": 49152,
+            "maxCalls": 36,
+            "maxAllocatedOutputTokens": 147456,
+            "callTimeoutMs": 120000,
+            "taskTimeoutMs": 900000,
+            "runTimeoutMs": 2700000
+          },
+          "planHash": "sha256:b9eea61116743b46f80707f780d06aa6b4615d6db8822c4b257680dc9d5b963b"
+        },
+        "acceptedVersion": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "status": "active",
+        "startedAt": 1000,
+        "deadlineAt": 2701000,
+        "acceptedTasks": [],
+        "waiting": [],
+        "attempts": [
+          {
+            "attemptId": "T-A-1",
+            "taskId": "T-A",
+            "workerId": "member-a",
+            "ownerEpoch": 1,
+            "leaseEpoch": 1,
+            "token": "token-T-A-1",
+            "baseVersion": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "inputHash": "sha256:48aed2374cea5f3bbbee1c8742439be758dcc1e999e0e3f0e03c1ee80e3565a0",
+            "contentHashes": {
+              "SPEC.md": null,
+              "src/normalize.ts": null
+            },
+            "startedAt": 1000,
+            "deadlineAt": 901000,
+            "status": "paused"
+          },
+          {
+            "attemptId": "T-B2-1",
+            "taskId": "T-B2",
+            "workerId": "member-b",
+            "ownerEpoch": 1,
+            "leaseEpoch": 1,
+            "token": "token-T-B2-1",
+            "baseVersion": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "inputHash": null,
+            "contentHashes": {},
+            "startedAt": 1006,
+            "deadlineAt": 901006,
+            "status": "running"
+          }
+        ],
+        "calls": [],
+        "actionReceipts": [
+          {
+            "requestId": "action",
+            "attemptId": "T-A-1",
+            "inputHash": "sha256:48aed2374cea5f3bbbee1c8742439be758dcc1e999e0e3f0e03c1ee80e3565a0",
+            "payloadHash": "sha256:dcad6d82f4fbc1a719e1eae989b0348592309bb2fada15b9052ba640ff2ca73d",
+            "kind": "inspect",
+            "status": "succeeded",
+            "outputHash": "sha256:4bbb1f9446ff0829909d2fa9e71d95f6c7df7e30ac16ddf96e9a6b429d6b3ebf"
+          }
+        ],
+        "checkReceipts": [],
+        "publishReceipts": [],
+        "coordination": {
+          "coordinationVersion": "build-scope-v1",
+          "lastNow": 1006,
+          "nextSequence": 2,
+          "taskEpochs": {
+            "T-A": 2,
+            "T-B1": 0,
+            "T-B2": 1
+          },
+          "taskStates": {
+            "T-A": "paused",
+            "T-B1": "queued",
+            "T-B2": "running"
+          },
+          "locks": [
+            {
+              "path": "SPEC.md",
+              "mode": "R",
+              "taskId": "T-B2",
+              "attemptId": "T-B2-1",
+              "leaseEpoch": 1
+            },
+            {
+              "path": "src/normalize.ts",
+              "mode": "W",
+              "taskId": "T-B2",
+              "attemptId": "T-B2-1",
+              "leaseEpoch": 1
+            }
+          ],
+          "requests": [
+            {
+              "requestId": "reserve-a",
+              "payloadHash": "sha256:b3e6fed61b6354565b87ba4c2b2ab993462e492a0f59af5e1910cb0aead96cf9",
+              "operation": "reserve",
+              "status": "succeeded",
+              "attemptId": "T-A-1",
+              "binding": null,
+              "result": {
+                "kind": "granted",
+                "lease": {
+                  "attemptId": "T-A-1",
+                  "taskId": "T-A",
+                  "workerId": "member-a",
+                  "ownerEpoch": 1,
+                  "leaseEpoch": 1,
+                  "token": "token-T-A-1"
+                }
+              }
+            },
+            {
+              "requestId": "bind",
+              "payloadHash": "sha256:1ffe7403e9f37e834a5f39d7d904620dfd5ec5a611b2183f18980e07b495fcd3",
+              "operation": "bind",
+              "status": "succeeded",
+              "attemptId": "T-A-1",
+              "binding": null,
+              "result": {
+                "kind": "bound",
+                "attemptId": "T-A-1"
+              }
+            },
+            {
+              "requestId": "action",
+              "payloadHash": "sha256:327ba997195a46794294cc9082277d23f6ca9f37c5caec91a99881e76a448f2f",
+              "operation": "action",
+              "status": "succeeded",
+              "attemptId": "T-A-1",
+              "binding": {
+                "kind": "inspect",
+                "inputHash": "sha256:48aed2374cea5f3bbbee1c8742439be758dcc1e999e0e3f0e03c1ee80e3565a0",
+                "payloadHash": "sha256:dcad6d82f4fbc1a719e1eae989b0348592309bb2fada15b9052ba640ff2ca73d",
+                "leaseHash": "sha256:34480c81d9e5c82f978c5efbf11aa271a4b11f8d3270fc658ea4b6cafe01858b"
+              },
+              "result": {
+                "kind": "settled",
+                "receipt": {
+                  "requestId": "action",
+                  "attemptId": "T-A-1",
+                  "inputHash": "sha256:48aed2374cea5f3bbbee1c8742439be758dcc1e999e0e3f0e03c1ee80e3565a0",
+                  "payloadHash": "sha256:dcad6d82f4fbc1a719e1eae989b0348592309bb2fada15b9052ba640ff2ca73d",
+                  "kind": "inspect",
+                  "status": "succeeded",
+                  "outputHash": "sha256:4bbb1f9446ff0829909d2fa9e71d95f6c7df7e30ac16ddf96e9a6b429d6b3ebf"
+                }
+              }
+            },
+            {
+              "requestId": "wait",
+              "payloadHash": "sha256:65dd7a548c87c3e4454a1a2cebd00a9f4a9e1ce805d998baa0edd2cf18fa7bd1",
+              "operation": "reserve",
+              "status": "succeeded",
+              "attemptId": null,
+              "binding": null,
+              "result": {
+                "kind": "waiting",
+                "taskId": "T-B2",
+                "reasons": [
+                  {
+                    "kind": "lock",
+                    "paths": ["src/normalize.ts"],
+                    "attemptIds": ["T-A-1"]
+                  }
+                ]
+              }
+            },
+            {
+              "requestId": "release",
+              "payloadHash": "sha256:302c814c5bec75ed0658ea50a7a1b8e14ff5288667499bee3bff6e477529bf64",
+              "operation": "release",
+              "status": "succeeded",
+              "attemptId": "T-A-1",
+              "binding": null,
+              "result": {
+                "kind": "released",
+                "attemptId": "T-A-1"
+              }
+            }
+          ]
+        }
+      },
+      "grants": [
+        {
+          "attemptId": "T-B2-1",
+          "taskId": "T-B2",
+          "workerId": "member-b",
+          "ownerEpoch": 1,
+          "leaseEpoch": 1,
+          "token": "token-T-B2-1"
+        }
+      ],
+      "waiting": []
+    },
+    "serializedHash": "sha256:f76b4d34be32055b3020d4640a10132dababb645ca0dd80fe862fecb1d5e40e9"
+  },
+  {
+    "result": {
+      "kind": "revoked",
+      "attemptId": "T-B2-1"
+    },
+    "serializedHash": "sha256:4f8c0cd78e4fed6b51e56534a2f623c844a059b1b93d69435cd8e6108bfd6519",
+    "canonicalHash": "sha256:2ab0df8378559afb88981f229234cee53ea5c1b7ff4c1714fa20c1684c946abe",
+    "revision": 8,
+    "requestHashes": [
+      "sha256:b3e6fed61b6354565b87ba4c2b2ab993462e492a0f59af5e1910cb0aead96cf9",
+      "sha256:1ffe7403e9f37e834a5f39d7d904620dfd5ec5a611b2183f18980e07b495fcd3",
+      "sha256:327ba997195a46794294cc9082277d23f6ca9f37c5caec91a99881e76a448f2f",
+      "sha256:65dd7a548c87c3e4454a1a2cebd00a9f4a9e1ce805d998baa0edd2cf18fa7bd1",
+      "sha256:302c814c5bec75ed0658ea50a7a1b8e14ff5288667499bee3bff6e477529bf64",
+      "sha256:f10ac685dbf7d0f4f88949aa4f18538c1c9cb559fbe7a76fd3e57b03e2835f0e"
+    ]
+  },
+  {
+    "result": {
+      "kind": "cancelled",
+      "taskId": "T-B1"
+    },
+    "serializedHash": "sha256:14109b569a17d3c07c3ce36cb11e548e3ed23285426b5e5bd0e1d2a13cc2a5f5",
+    "canonicalHash": "sha256:9434caef9f8b1980e122720d498deb67262ac7bbe4acdcb7137beb55ca861fb2",
+    "revision": 9,
+    "requestHashes": [
+      "sha256:b3e6fed61b6354565b87ba4c2b2ab993462e492a0f59af5e1910cb0aead96cf9",
+      "sha256:1ffe7403e9f37e834a5f39d7d904620dfd5ec5a611b2183f18980e07b495fcd3",
+      "sha256:327ba997195a46794294cc9082277d23f6ca9f37c5caec91a99881e76a448f2f",
+      "sha256:65dd7a548c87c3e4454a1a2cebd00a9f4a9e1ce805d998baa0edd2cf18fa7bd1",
+      "sha256:302c814c5bec75ed0658ea50a7a1b8e14ff5288667499bee3bff6e477529bf64",
+      "sha256:f10ac685dbf7d0f4f88949aa4f18538c1c9cb559fbe7a76fd3e57b03e2835f0e",
+      "sha256:ee12904f9dfab9846fa6e1b4e12b9047049f45b15123df2b91a9121f93896ebd"
+    ]
+  },
+  {
+    "result": {
+      "kind": "epoch_advanced",
+      "ownerEpoch": 2
+    },
+    "serializedHash": "sha256:8bb26bb7ffe28b6fb14eb2e4fba5c8f265df9ae7e9fc0bd476ee6f31268fa023",
+    "canonicalHash": "sha256:3ac3144d6f6025c1ee418c6e24a5cd5e4bf076baa42c02ef75b6dab9929ae6d0",
+    "revision": 10,
+    "requestHashes": [
+      "sha256:b3e6fed61b6354565b87ba4c2b2ab993462e492a0f59af5e1910cb0aead96cf9",
+      "sha256:1ffe7403e9f37e834a5f39d7d904620dfd5ec5a611b2183f18980e07b495fcd3",
+      "sha256:327ba997195a46794294cc9082277d23f6ca9f37c5caec91a99881e76a448f2f",
+      "sha256:65dd7a548c87c3e4454a1a2cebd00a9f4a9e1ce805d998baa0edd2cf18fa7bd1",
+      "sha256:302c814c5bec75ed0658ea50a7a1b8e14ff5288667499bee3bff6e477529bf64",
+      "sha256:f10ac685dbf7d0f4f88949aa4f18538c1c9cb559fbe7a76fd3e57b03e2835f0e",
+      "sha256:ee12904f9dfab9846fa6e1b4e12b9047049f45b15123df2b91a9121f93896ebd",
+      "sha256:e1f356638a8956f3b8962a47e10af766687f2b307d4134e27372a135a39ee987"
+    ]
+  },
+  {
+    "result": {
+      "kind": "replayed",
+      "receipt": {
+        "kind": "granted",
+        "lease": {
+          "attemptId": "T-A-1",
+          "taskId": "T-A",
+          "workerId": "member-a",
+          "ownerEpoch": 1,
+          "leaseEpoch": 1,
+          "token": "token-T-A-1"
+        }
+      }
+    },
+    "serializedHash": "sha256:8bb26bb7ffe28b6fb14eb2e4fba5c8f265df9ae7e9fc0bd476ee6f31268fa023",
+    "canonicalHash": "sha256:3ac3144d6f6025c1ee418c6e24a5cd5e4bf076baa42c02ef75b6dab9929ae6d0",
+    "revision": 10,
+    "requestHashes": [
+      "sha256:b3e6fed61b6354565b87ba4c2b2ab993462e492a0f59af5e1910cb0aead96cf9",
+      "sha256:1ffe7403e9f37e834a5f39d7d904620dfd5ec5a611b2183f18980e07b495fcd3",
+      "sha256:327ba997195a46794294cc9082277d23f6ca9f37c5caec91a99881e76a448f2f",
+      "sha256:65dd7a548c87c3e4454a1a2cebd00a9f4a9e1ce805d998baa0edd2cf18fa7bd1",
+      "sha256:302c814c5bec75ed0658ea50a7a1b8e14ff5288667499bee3bff6e477529bf64",
+      "sha256:f10ac685dbf7d0f4f88949aa4f18538c1c9cb559fbe7a76fd3e57b03e2835f0e",
+      "sha256:ee12904f9dfab9846fa6e1b4e12b9047049f45b15123df2b91a9121f93896ebd",
+      "sha256:e1f356638a8956f3b8962a47e10af766687f2b307d4134e27372a135a39ee987"
+    ]
+  },
+  {
+    "result": {
+      "kind": "expired",
+      "attemptIds": []
+    },
+    "serializedHash": "sha256:cc20c7505d0d56f784c0e2afcd2bb2c77b127e12304012ab84220495bf334196",
+    "canonicalHash": "sha256:0fd58957426ade006ac34b5097b786c026a89487bc1012509d59a5b480a17abd",
+    "revision": 11,
+    "requestHashes": [
+      "sha256:b3e6fed61b6354565b87ba4c2b2ab993462e492a0f59af5e1910cb0aead96cf9",
+      "sha256:1ffe7403e9f37e834a5f39d7d904620dfd5ec5a611b2183f18980e07b495fcd3",
+      "sha256:327ba997195a46794294cc9082277d23f6ca9f37c5caec91a99881e76a448f2f",
+      "sha256:65dd7a548c87c3e4454a1a2cebd00a9f4a9e1ce805d998baa0edd2cf18fa7bd1",
+      "sha256:302c814c5bec75ed0658ea50a7a1b8e14ff5288667499bee3bff6e477529bf64",
+      "sha256:f10ac685dbf7d0f4f88949aa4f18538c1c9cb559fbe7a76fd3e57b03e2835f0e",
+      "sha256:ee12904f9dfab9846fa6e1b4e12b9047049f45b15123df2b91a9121f93896ebd",
+      "sha256:e1f356638a8956f3b8962a47e10af766687f2b307d4134e27372a135a39ee987"
+    ]
+  }
+]

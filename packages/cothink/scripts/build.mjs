@@ -12,7 +12,12 @@ await build({
   format: "esm",
   target: "node22",
   packages: "external",
-  alias: { "@onevcat/argue": resolve(repoDir, "packages/argue/src/index.ts") },
+  alias: {
+    "@onevcat/argue/agent-sync/project": resolve(repoDir, "packages/argue/src/agent-sync/project/index.ts"),
+    "@onevcat/argue/agent-sync/legacy-v1": resolve(repoDir, "packages/argue/src/agent-sync/legacy-v1/index.ts"),
+    "@onevcat/argue/agent-sync": resolve(repoDir, "packages/argue/src/agent-sync/index.ts"),
+    "@onevcat/argue": resolve(repoDir, "packages/argue/src/index.ts")
+  },
   sourcemap: false
 });
 await chmod(resolve(packageDir, "dist/cli.js"), 0o755);

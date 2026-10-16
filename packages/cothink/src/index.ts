@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import type { MemberId, MemberRuntime, ModelTransport } from "@onevcat/argue";
 import metadata from "../package.json" with { type: "json" };
 import { runDiscussionCommand } from "../../argue-cli/src/discussion/commands.js";
+import { runBuildCommand } from "../../argue-cli/src/build/commands.js";
 import { loadDiscussionConfig } from "../../argue-cli/src/discussion/config.js";
 import { testPeerConnections } from "../../argue-cli/src/peer/diagnostics.js";
 import { DEFAULT_PEER_CONFIG, DEFAULT_PEER_ENV, readPeerEnvironment } from "../../argue-cli/src/peer/local-config.js";
@@ -21,6 +22,9 @@ const commands = new Set(["start", "show", "retry", "continue", "export", "view"
 function help(io: Io) {
   io.log(`CoThink v${metadata.version} — two equal model peers, local versioned discussions.`);
   io.log("Usage: cothink setup | init | test | start | show | retry | continue | export | view");
+  io.log(
+    "  build start|show|retry|cancel|export  Local construction; use cothink build help for explicit plan approval."
+  );
   io.log("  setup [--config FILE] [--env-file FILE] [--no-input]  Configure two members; optional keys are masked.");
   io.log(
     "  init [--config FILE] [--env-file FILE]              Write an editable generic template, without API calls."
@@ -99,6 +103,12 @@ export async function runCoThink(
       return { ok: true, code: 0 };
     }
     const base = dependencies.env ?? process.env;
+    if (command === "build")
+      return runBuildCommand(rest, io, {
+        env: base,
+        transport: dependencies.transport,
+        now: dependencies.now
+      });
     if (["setup", "init", "test", "doctor"].includes(command)) {
       const isSetup = command === "setup" || command === "init";
       const { values, flags } = parseManagement(rest, isSetup ? "setup" : "test");
